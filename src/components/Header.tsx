@@ -2,24 +2,32 @@
 // notifications and the user menu. "Semua Perusahaan" puts the app into
 // read-only holding mode.
 
+import { useState } from 'react'
 import { useApp } from '../store'
-import { ALL_COMPANY, ROLES, allCompanies, co } from '../theme'
+import { ALL_COMPANY, ROLES, allCompanies, co, type MenuKey } from '../theme'
+import { useData } from '../dataStore'
+import { GhostButton, Modal, PrimaryButton } from './Modal'
 
 interface Notif {
   title: string
   sub: string
   dot: string
+  menu: MenuKey
 }
 
+// Each notification links to the menu where the user can act on it.
 const NOTIFS: Notif[] = [
-  { title: 'INV-2025/BCK/019 jatuh tempo terlewat', sub: 'PT PLN UIP JBT · Rp 9,8 M', dot: '#DC2626' },
-  { title: 'SO Testing & Commissioning mendekati deadline', sub: 'Gardu Induk Cikarang · 3 hari lagi', dot: '#D97706' },
-  { title: 'BAPP Genset 500kVA menunggu tanda tangan', sub: 'PT Karya Prima Sejahtera', dot: '#7C3AED' },
-  { title: 'Stok MCCB 3P 250A di bawah minimum', sub: 'Gudang Cakung · 24/40 unit', dot: '#DC2626' },
+  { title: 'INV-2025/BCK/019 jatuh tempo terlewat', sub: 'PT PLN UIP JBT · Rp 9,8 M', dot: '#DC2626', menu: 'invoices' },
+  { title: 'SO Testing & Commissioning mendekati deadline', sub: 'Gardu Induk Cikarang · 3 hari lagi', dot: '#D97706', menu: 'proyek' },
+  { title: 'BAPP Genset 500kVA menunggu tanda tangan', sub: 'PT Karya Prima Sejahtera', dot: '#7C3AED', menu: 'proyek' },
+  { title: 'Stok MCCB 3P 250A di bawah minimum', sub: 'Gudang Cakung · 24/40 unit', dot: '#DC2626', menu: 'warehouse' },
 ]
 
 export default function Header() {
-  const { state, set, pickCompany, logout } = useApp()
+  const { state, set, go, pickCompany, toast, logout } = useApp()
+  const { resetAll } = useData()
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const cur =
     state.company === 'all'
@@ -46,6 +54,7 @@ export default function Header() {
   ]
 
   return (
+    <>
     <header
       style={{
         height: 64,
@@ -265,13 +274,13 @@ export default function Header() {
           >
             <div style={{ fontSize: 13, fontWeight: 800, padding: '8px 10px 6px' }}>Notifikasi</div>
             {NOTIFS.map((n, i) => (
-              <div key={i} className="hv-menu-item-soft" style={{ display: 'flex', gap: 10, padding: 10, borderRadius: 10 }}>
+              <button key={i} onClick={() => go(n.menu)} className="hv-menu-item-soft" style={{ display: 'flex', gap: 10, padding: 10, borderRadius: 10, width: '100%', textAlign: 'left' }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: n.dot, marginTop: 5, flex: 'none' }} />
                 <div style={{ lineHeight: 1.35 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#0F172A' }}>{n.title}</div>
                   <div style={{ fontSize: 11, color: '#94A3B8' }}>{n.sub}</div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -323,8 +332,8 @@ export default function Header() {
               zIndex: 30,
             }}
           >
-            <button className="hv-menu-item" style={menuItemStyle}>Profil saya</button>
-            <button className="hv-menu-item" style={menuItemStyle}>Pengaturan</button>
+            <button onClick={() => { setProfileOpen(true); set({ userMenuOpen: false }) }} className="hv-menu-item" style={menuItemStyle}>Profil saya</button>
+            <button onClick={() => { setSettingsOpen(true); set({ userMenuOpen: false }) }} className="hv-menu-item" style={menuItemStyle}>Pengaturan</button>
             <div style={{ height: 1, background: '#E2E8F0', margin: '4px 0' }} />
             <button
               onClick={logout}
@@ -337,6 +346,58 @@ export default function Header() {
         )}
       </div>
     </header>
+
+    {profileOpen && (
+      <Modal title="Profil Saya" onClose={() => setProfileOpen(false)} width={440} footer={<PrimaryButton onClick={() => setProfileOpen(false)}>Tutup</PrimaryButton>}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
+          <span style={{ width: 56, height: 56, borderRadius: 14, background: 'linear-gradient(135deg,#1E3A8A,#2563EB)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 20 }}>HW</span>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>Hendra Wijaya</div>
+            <div style={{ fontSize: 13, color: '#64748B' }}>{ROLES[state.role].label}</div>
+          </div>
+        </div>
+        <ProfileRow label="Email" value="hendra.wijaya@holdingos.co.id" />
+        <ProfileRow label="Role Aktif" value={ROLES[state.role].label} />
+        <ProfileRow label="Perusahaan Aktif" value={state.company === 'all' ? ALL_COMPANY.name : co(state.company).name} last />
+      </Modal>
+    )}
+
+    {settingsOpen && (
+      <Modal title="Pengaturan" subtitle="Preferensi aplikasi & data lokal" onClose={() => setSettingsOpen(false)} width={480} footer={<GhostButton onClick={() => setSettingsOpen(false)}>Tutup</GhostButton>}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 800 }}>Penyimpanan Data</div>
+            <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 4, lineHeight: 1.5 }}>Semua data (proyek, dokumen, dll) tersimpan lokal di browser ini. Reset akan mengembalikan seluruh data ke contoh awal — tidak bisa dibatalkan.</div>
+            <button
+              onClick={() => {
+                if (confirm('Reset semua data ke contoh awal? Tindakan ini tidak bisa dibatalkan.')) {
+                  resetAll()
+                  setSettingsOpen(false)
+                  toast('Semua data direset ke contoh awal')
+                }
+              }}
+              style={{ marginTop: 12, fontSize: 13, fontWeight: 700, color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '9px 16px' }}
+            >
+              Reset semua data
+            </button>
+          </div>
+          <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 800 }}>Tentang</div>
+            <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 4 }}>HoldingOS · aplikasi manajemen & monitoring multi-perusahaan. Versi prototipe.</div>
+          </div>
+        </div>
+      </Modal>
+    )}
+    </>
+  )
+}
+
+function ProfileRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 0', borderBottom: last ? 'none' : '1px solid #F1F5F9' }}>
+      <span style={{ fontSize: 13, color: '#64748B' }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 700 }}>{value}</span>
+    </div>
   )
 }
 
