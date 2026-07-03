@@ -1,0 +1,21 @@
+rules_version = '2';
+
+// HoldingOS Firestore rules.
+// Starter policy for a small internal tool: any signed-in user has full access
+// to the shared workspace data. Tighten later (per-company / per-role) once the
+// user model is finalized.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Everything under the shared workspace requires authentication.
+    match /workspaces/{wsId}/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // User profile/role documents — a signed-in user may read all (to resolve
+    // teammates) and write their own or any (admin-lite). Tighten if needed.
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+  }
+}

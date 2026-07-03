@@ -1,0 +1,14 @@
+rules_version = '2';
+
+// HoldingOS Cloud Storage rules.
+// Signed-in users can read/write documents under the shared workspace path.
+// Uploads are capped at 15 MB to keep costs predictable.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /workspaces/{wsId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && request.resource.size < 15 * 1024 * 1024;
+    }
+  }
+}
