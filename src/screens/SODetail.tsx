@@ -1,13 +1,14 @@
 // SO detail — opened from a project. Tabs: Progress & Milestone, PO Keluar,
 // Keuangan, BAST (the SO-closing document with pipeline + checklist).
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useApp } from '../store'
 import { co, fmtC, stt } from '../theme'
 import { soForProject } from '../data'
 import { useData, type POKeluarRow, type ProyekRow } from '../dataStore'
 import { Icon, StatusBadge, Tabs } from '../components/ui'
 import { DocumentManager } from '../components/Modal'
+import { PODetailModal, POFormModal } from '../components/PODetail'
 import { History, Stepper } from './ProyekDetail'
 
 const SO_TABS = [
@@ -38,6 +39,9 @@ export default function SODetail() {
   const pc = co(P0.co)
   const sos = soForProject(P0)
   const SO = sos.find((x) => x.id === state.detailSO) || sos[0]
+
+  const [poFormOpen, setPoFormOpen] = useState(false)
+  const [poDetail, setPoDetail] = useState<POKeluarRow | null>(null)
   const sst = stt(SO.status)
 
   const sdBudget = [
@@ -133,7 +137,7 @@ export default function SODetail() {
           <div style={{ paddingTop: 22 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div style={{ fontSize: 14, fontWeight: 800 }}>PO Keluar ke Supplier / Subcont</div>
-              <button style={softBtn}>+ PO Keluar</button>
+              <button style={softBtn} onClick={() => setPoFormOpen(true)}>+ PO Keluar</button>
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
@@ -146,8 +150,8 @@ export default function SODetail() {
                 </tr>
               </thead>
               <tbody>
-                {rows<POKeluarRow>('poKeluar').map((p, i) => (
-                  <tr key={i} style={{ borderTop: '1px solid #F1F5F9' }}>
+                {rows<POKeluarRow>('poKeluar').map((p) => (
+                  <tr key={p.id} onClick={() => setPoDetail(p)} className="hv-row" style={{ borderTop: '1px solid #F1F5F9', cursor: 'pointer' }}>
                     <td style={{ padding: '13px 14px', fontWeight: 700, fontFamily: 'ui-monospace,monospace', fontSize: 12 }}>{p.no}</td>
                     <td style={{ padding: '13px 8px', fontWeight: 600, color: '#334155' }}>{p.supplier}</td>
                     <td style={{ padding: '13px 8px', textAlign: 'right', fontWeight: 800 }}>{fmtC(p.nilai)}</td>
@@ -159,6 +163,7 @@ export default function SODetail() {
                 ))}
               </tbody>
             </table>
+            <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 12 }}>Klik baris PO untuk melihat detail &amp; export PDF.</div>
           </div>
         )}
 
@@ -257,6 +262,9 @@ export default function SODetail() {
           </div>
         )}
       </div>
+
+      {poFormOpen && <POFormModal defaultCo={P0.co} onClose={() => setPoFormOpen(false)} />}
+      {poDetail && <PODetailModal po={poDetail} onClose={() => setPoDetail(null)} />}
     </div>
   )
 }

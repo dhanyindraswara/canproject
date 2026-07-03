@@ -3,7 +3,8 @@
 
 import { useMemo, useState } from 'react'
 import { useApp } from '../store'
-import { co, curCoName, fmtC } from '../theme'
+import { co, curCoName, fmt, fmtC } from '../theme'
+import { printDocument } from '../print'
 import { useData, type InvoiceRow } from '../dataStore'
 import { CompanyBadge, StatusBadge } from '../components/ui'
 import {
@@ -70,6 +71,26 @@ export default function Invoices() {
     toast('Invoice baru diterbitkan')
   }
 
+  const exportInvoice = (i: InvoiceRow) => {
+    const ok = printDocument({
+      title: 'Invoice',
+      docNo: i.no,
+      company: co(i.co).name,
+      meta: [
+        { label: 'No. Invoice', value: i.no },
+        { label: 'Proyek', value: i.proj },
+        { label: 'Tanggal Terbit', value: i.tgl },
+        { label: 'Jatuh Tempo', value: i.due },
+        { label: 'Status', value: i.status },
+        { label: 'Nilai Tagihan', value: fmt(i.nilai) },
+      ],
+      tableTitle: 'Rincian Tagihan',
+      tableRows: [{ label: `Penagihan proyek: ${i.proj}`, value: fmt(i.nilai) }],
+      footnote: 'Invoice ini diterbitkan melalui HoldingOS. Mohon lakukan pembayaran sebelum tanggal jatuh tempo.',
+    })
+    if (!ok) toast('Popup diblokir browser — izinkan popup untuk ekspor PDF')
+  }
+
   return (
     <div style={{ animation: 'fadeUp .3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 18 }}>
@@ -131,8 +152,11 @@ export default function Invoices() {
                 <td style={{ padding: '13px 8px', textAlign: 'center' }}>
                   <button onClick={() => setDocInv(i)} title="Dokumen invoice"><DocCountBadge scope={`invoice:${i.id}`} /></button>
                 </td>
-                <td style={{ padding: '13px 8px', textAlign: 'center' }}>
-                  <RowAction kind="delete" title="Hapus invoice" onClick={() => { removeRow('invoices', i.id); toast('Invoice dihapus') }} />
+                <td style={{ padding: '13px 8px' }}>
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center' }}>
+                    <button onClick={() => exportInvoice(i)} title="Export PDF" style={{ fontSize: 11, fontWeight: 700, color: '#1E3A8A', background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 7, padding: '6px 10px' }}>PDF</button>
+                    <RowAction kind="delete" title="Hapus invoice" onClick={() => { removeRow('invoices', i.id); toast('Invoice dihapus') }} />
+                  </div>
                 </td>
               </tr>
             ))}
