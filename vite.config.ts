@@ -5,8 +5,8 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   // Absolute base matching the GitHub Pages project subpath. Using the
   // explicit path (instead of './') keeps asset URLs correct even when the
-  // page is opened without a trailing slash (/projectmanagement).
-  base: '/projectmanagement/',
+  // page is opened without a trailing slash (/canproject).
+  base: '/canproject/',
   plugins: [react()],
   server: {
     host: true,
