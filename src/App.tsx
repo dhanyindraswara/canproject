@@ -6,6 +6,7 @@ import Header from './components/Header'
 import Sidebar from './components/Sidebar'
 import Toast from './components/Toast'
 import { AppProvider, useApp } from './store'
+import { DataProvider } from './dataStore'
 import Login from './screens/Login'
 import Dashboard from './screens/Dashboard'
 import Tender from './screens/Tender'
@@ -13,6 +14,7 @@ import ProyekList from './screens/ProyekList'
 import ProyekDetail from './screens/ProyekDetail'
 import SODetail from './screens/SODetail'
 import Warehouse from './screens/Warehouse'
+import Documents from './screens/Documents'
 import Master from './screens/Master'
 import Users from './screens/Users'
 import Invoices from './screens/Invoices'
@@ -34,6 +36,8 @@ function Content() {
       return <Tender />
     case 'warehouse':
       return <Warehouse />
+    case 'documents':
+      return <Documents />
     case 'master':
       return <Master />
     case 'users':
@@ -68,8 +72,10 @@ function Shell() {
 
 export default function App() {
   return (
-    <AppProvider>
-      <Shell />
-    </AppProvider>
+    <DataProvider>
+      <AppProvider>
+        <Shell />
+      </AppProvider>
+    </DataProvider>
   )
 }

@@ -4,24 +4,33 @@
 import { useMemo, useState } from 'react'
 import { useApp } from '../store'
 import { curCoName, fmtC, stt } from '../theme'
-import { P } from '../data'
+import { useData, type ProyekRow } from '../dataStore'
 import { CompanyBadge, Icon, StatusBadge } from '../components/ui'
+import { AddButton, CompanySelect, Field, FieldRow, GhostButton, Modal, NumberField, PrimaryButton, SelectField } from '../components/Modal'
 
 const PAGE_SIZE = 5
 const STATUSES = ['Aktif', 'BAPP', 'Closed']
 
 const th = { fontWeight: 700, padding: '12px 8px' } as const
 
+const emptyProyek = { no: '', name: '', client: '', co: 'kps', nilai: '', termin: '1 Termin', status: 'Aktif' }
+
 export default function ProyekList() {
-  const { state, openProyek } = useApp()
+  const { state, openProyek, toast } = useApp()
+  const { rows: dataRows, addRow } = useData()
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string[]>([])
   const [filterOpen, setFilterOpen] = useState(false)
   const [page, setPage] = useState(1)
+  const [formOpen, setFormOpen] = useState(false)
+  const [form, setForm] = useState(emptyProyek)
+
+  const projects = dataRows<ProyekRow>('projects')
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return P.filter((p) => state.company === 'all' || p.co === state.company)
+    return projects
+      .filter((p) => state.company === 'all' || p.co === state.company)
       .filter((p) => (statusFilter.length === 0 ? true : statusFilter.includes(p.status)))
       .filter(
         (p) =>
@@ -30,7 +39,7 @@ export default function ProyekList() {
           p.name.toLowerCase().includes(q) ||
           p.client.toLowerCase().includes(q),
       )
-  }, [state.company, query, statusFilter])
+  }, [projects, state.company, query, statusFilter])
 
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
   const curPage = Math.min(page, pageCount)
@@ -39,6 +48,29 @@ export default function ProyekList() {
   const toggleStatus = (s: string) => {
     setPage(1)
     setStatusFilter((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
+  }
+
+  const submitProyek = () => {
+    if (!form.name.trim() || !form.client.trim()) {
+      toast('Nama proyek & client wajib diisi')
+      return
+    }
+    addRow('projects', {
+      no: form.no.trim() || `PO-2026/${form.co.toUpperCase()}/${Math.floor(100 + Math.random() * 900)}`,
+      name: form.name.trim(),
+      client: form.client.trim(),
+      co: form.co,
+      nilai: Number(form.nilai) || 0,
+      termin: form.termin,
+      progress: 0,
+      status: form.status,
+      so: 0,
+      masuk: 0,
+      keluar: 0,
+    })
+    setForm(emptyProyek)
+    setFormOpen(false)
+    toast('Proyek baru ditambahkan')
   }
 
   return (
@@ -52,9 +84,12 @@ export default function ProyekList() {
             Daftar proyek (PO Client)
           </h1>
         </div>
-        <span style={{ fontSize: 13, color: '#64748B', fontWeight: 600 }}>
-          {rows.length} proyek · {curCoName(state.company)}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <span style={{ fontSize: 13, color: '#64748B', fontWeight: 600 }}>
+            {rows.length} proyek · {curCoName(state.company)}
+          </span>
+          <AddButton label="Proyek Baru" onClick={() => setFormOpen(true)} />
+        </div>
       </div>
 
       <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, overflow: 'hidden' }}>
@@ -278,6 +313,36 @@ export default function ProyekList() {
           </div>
         </div>
       </div>
+
+      {formOpen && (
+        <Modal
+          title="Proyek Baru"
+          subtitle="Tambahkan proyek / PO client"
+          onClose={() => setFormOpen(false)}
+          footer={
+            <>
+              <GhostButton onClick={() => setFormOpen(false)}>Batal</GhostButton>
+              <PrimaryButton onClick={submitProyek}>Simpan Proyek</PrimaryButton>
+            </>
+          }
+        >
+          <div style={{ marginBottom: 14 }}>
+            <Field label="Nama Proyek" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="mis. Pengadaan Panel Distribusi 20kV" />
+          </div>
+          <FieldRow>
+            <Field label="No. PO / Kontrak (opsional)" value={form.no} onChange={(v) => setForm({ ...form, no: v })} placeholder="otomatis bila kosong" />
+            <Field label="Client" value={form.client} onChange={(v) => setForm({ ...form, client: v })} placeholder="mis. PT PLN (Persero)" />
+          </FieldRow>
+          <FieldRow>
+            <CompanySelect value={form.co} onChange={(v) => setForm({ ...form, co: v })} />
+            <NumberField label="Nilai Kontrak (Rp)" value={form.nilai} onChange={(v) => setForm({ ...form, nilai: v })} placeholder="0" />
+          </FieldRow>
+          <FieldRow>
+            <SelectField label="Termin" value={form.termin} onChange={(v) => setForm({ ...form, termin: v })} options={['1 Termin', '2 Termin', '3 Termin', '4 Termin', '5 Termin'].map((t) => ({ value: t, label: t }))} />
+            <SelectField label="Status" value={form.status} onChange={(v) => setForm({ ...form, status: v })} options={STATUSES.map((s) => ({ value: s, label: s }))} />
+          </FieldRow>
+        </Modal>
+      )}
     </div>
   )
 }

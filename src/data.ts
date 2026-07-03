@@ -208,6 +208,12 @@ export const banks: Bank[] = [
 // Derives the Sales Orders for a given project — mirrors soFor() in the source.
 export function soFor(projId: string): SalesOrder[] {
   const p = P.find((x) => x.id === projId) || P[0]
+  return soForProject(p)
+}
+
+// Same derivation but from a project object (works for store-created projects
+// that aren't part of the static `P` seed array).
+export function soForProject(p: Proyek): SalesOrder[] {
   const suffix = p.no.split('/')[2]
   const list: SalesOrder[] = [
     { id: 'so1', no: 'SO-' + suffix + '-01', scope: 'Fabrikasi & Supply Panel Utama', nilai: Math.round(p.nilai * 0.42), progress: 100, status: 'Selesai', target: '20 Jun 2026' },

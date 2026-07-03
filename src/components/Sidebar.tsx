@@ -16,6 +16,7 @@ const MENUS: NavItem[] = [
   { key: 'tender', label: 'Tender', icon: 'M5 4h4v16H5zM11 4h4v10h-4zM17 4h4v13h-4z' },
   { key: 'proyek', label: 'Proyek', icon: 'M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2z' },
   { key: 'warehouse', label: 'Warehouse & Aset', icon: 'M3 9l9-5 9 5v9a1 1 0 01-1 1H4a1 1 0 01-1-1zM9 21v-8h6v8' },
+  { key: 'documents', label: 'Dokumen', icon: 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M9 13h6M9 17h6' },
   { key: 'master', label: 'Master Data', icon: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3' },
   { key: 'users', label: 'User & Akses', icon: 'M17 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9.5 11a4 4 0 100-8 4 4 0 000 8z' },
 ]

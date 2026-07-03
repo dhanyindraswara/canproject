@@ -9,6 +9,7 @@ const LANDING_LABEL: Record<MenuKey, string> = {
   proyek: 'Daftar Proyek',
   invoices: 'Semua Invoice',
   warehouse: 'Stok & Aset',
+  documents: 'Dokumen',
   tender: 'Tender',
   master: 'Master Data',
   users: 'User & Akses',

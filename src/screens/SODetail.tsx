@@ -4,8 +4,10 @@
 import type { ReactNode } from 'react'
 import { useApp } from '../store'
 import { co, fmtC, stt } from '../theme'
-import { P, poKeluar, soFor } from '../data'
+import { soForProject } from '../data'
+import { useData, type POKeluarRow, type ProyekRow } from '../dataStore'
 import { Icon, StatusBadge, Tabs } from '../components/ui'
+import { DocumentManager } from '../components/Modal'
 import { History, Stepper } from './ProyekDetail'
 
 const SO_TABS = [
@@ -29,10 +31,12 @@ const th = { fontWeight: 700, padding: '11px 8px' } as const
 
 export default function SODetail() {
   const { state, set } = useApp()
+  const { rows } = useData()
 
-  const P0 = P.find((x) => x.id === state.detailProyek) || P[0]
+  const projects = rows<ProyekRow>('projects')
+  const P0 = projects.find((x) => x.id === state.detailProyek) || projects[0]
   const pc = co(P0.co)
-  const sos = soFor(P0.id)
+  const sos = soForProject(P0)
   const SO = sos.find((x) => x.id === state.detailSO) || sos[0]
   const sst = stt(SO.status)
 
@@ -142,7 +146,7 @@ export default function SODetail() {
                 </tr>
               </thead>
               <tbody>
-                {poKeluar.map((p, i) => (
+                {rows<POKeluarRow>('poKeluar').map((p, i) => (
                   <tr key={i} style={{ borderTop: '1px solid #F1F5F9' }}>
                     <td style={{ padding: '13px 14px', fontWeight: 700, fontFamily: 'ui-monospace,monospace', fontSize: 12 }}>{p.no}</td>
                     <td style={{ padding: '13px 8px', fontWeight: 600, color: '#334155' }}>{p.supplier}</td>
@@ -244,26 +248,9 @@ export default function SODetail() {
                       ))}
                     </div>
                   </div>
-                  <button
-                    className="hv-upload"
-                    style={{
-                      marginTop: 12,
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 8,
-                      border: '1.5px dashed #CBD5E1',
-                      borderRadius: 10,
-                      padding: 12,
-                      fontSize: 12.5,
-                      fontWeight: 700,
-                      color: '#64748B',
-                    }}
-                  >
-                    <Icon d={['M12 15V3M7 8l5-5 5 5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2']} size={16} width={2} />
-                    Unggah foto / PDF serah terima
-                  </button>
+                </div>
+                <div style={{ marginTop: 18 }}>
+                  <DocumentManager scope={`so:${SO.id}`} title="Dokumen & Foto Serah Terima" />
                 </div>
               </div>
             </div>

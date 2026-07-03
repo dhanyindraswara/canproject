@@ -23,6 +23,7 @@ export type MenuKey =
   | 'tender'
   | 'proyek'
   | 'warehouse'
+  | 'documents'
   | 'master'
   | 'users'
   | 'invoices'
