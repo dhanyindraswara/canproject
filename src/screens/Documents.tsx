@@ -5,13 +5,9 @@
 import { useMemo, useState } from 'react'
 import { useData, formatBytes, type DocItem, type InvoiceRow, type ProyekRow, type TenderRow } from '../dataStore'
 import { Icon } from '../components/ui'
-import { DocumentManager, Modal } from '../components/Modal'
+import { DocumentManager, DocViewer } from '../components/Modal'
 
 const th = { fontWeight: 700, padding: '12px 8px' } as const
-
-function isImage(mime: string) {
-  return mime.startsWith('image/')
-}
 
 export default function Documents() {
   const { data, rows, removeDoc, storageWarning } = useData()
@@ -136,19 +132,7 @@ export default function Documents() {
       </div>
 
       {preview && (
-        <Modal title={preview.name} subtitle={`${preview.category} · ${formatBytes(preview.size)} · ${resolveScope(preview.scope)}`} onClose={() => setPreview(null)} width={720}>
-          {isImage(preview.mime) ? (
-            <img src={preview.dataUrl} alt={preview.name} style={{ width: '100%', borderRadius: 12, border: '1px solid #E2E8F0' }} />
-          ) : preview.mime === 'application/pdf' ? (
-            <iframe title={preview.name} src={preview.dataUrl} style={{ width: '100%', height: 460, border: '1px solid #E2E8F0', borderRadius: 12 }} />
-          ) : (
-            <div style={{ textAlign: 'center', padding: '30px 10px', color: '#64748B' }}>
-              <Icon d={['M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z', 'M14 2v6h6']} size={40} width={1.5} style={{ color: '#CBD5E1' }} />
-              <div style={{ fontSize: 13, marginTop: 10 }}>Pratinjau tidak tersedia untuk tipe file ini.</div>
-              <a href={preview.dataUrl} download={preview.name} style={{ display: 'inline-block', marginTop: 14, background: '#1E3A8A', color: '#fff', fontSize: 13, fontWeight: 700, padding: '10px 18px', borderRadius: 11, textDecoration: 'none' }}>Unduh file</a>
-            </div>
-          )}
-        </Modal>
+        <DocViewer doc={preview} subtitle={`${preview.category} · ${formatBytes(preview.size)} · ${resolveScope(preview.scope)}`} onClose={() => setPreview(null)} />
       )}
     </div>
   )

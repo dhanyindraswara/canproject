@@ -437,22 +437,61 @@ export function DocumentManager({ scope, title = 'Dokumen', accentEmpty }: { sco
       )}
 
       {preview && (
-        <Modal title={preview.name} subtitle={`${preview.category} · ${formatBytes(preview.size)} · ${preview.uploadedAt}`} onClose={() => setPreview(null)} width={720}>
-          {isImage(preview.mime) ? (
-            <img src={preview.dataUrl} alt={preview.name} style={{ width: '100%', borderRadius: 12, border: '1px solid #E2E8F0' }} />
-          ) : preview.mime === 'application/pdf' ? (
-            <iframe title={preview.name} src={preview.dataUrl} style={{ width: '100%', height: 460, border: '1px solid #E2E8F0', borderRadius: 12 }} />
+        <DocViewer doc={preview} subtitle={`${preview.category} · ${formatBytes(preview.size)} · ${preview.uploadedAt}`} onClose={() => setPreview(null)} />
+      )}
+    </div>
+  )
+}
+
+// Large, near-fullscreen document viewer used everywhere a document is opened.
+export function DocViewer({ doc, subtitle, onClose }: { doc: DocItem; subtitle?: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const image = isImage(doc.mime)
+  const pdf = doc.mime === 'application/pdf'
+
+  return (
+    <div
+      onMouseDown={onClose}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.62)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2.5vh 2vw', zIndex: 120, animation: 'fadeUp .18s ease' }}
+    >
+      <div
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{ background: '#fff', borderRadius: 16, width: '96vw', maxWidth: 1200, height: '95vh', display: 'flex', flexDirection: 'column', boxShadow: '0 30px 80px -20px rgba(2,6,23,.5)', animation: 'slideDown .2s ease', overflow: 'hidden' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', borderBottom: '1px solid #F1F5F9', flex: 'none' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{doc.name}</div>
+            <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>{subtitle || `${doc.category} · ${formatBytes(doc.size)} · ${doc.uploadedAt}`}</div>
+          </div>
+          <a href={doc.dataUrl} download={doc.name} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: '#475569', background: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 9, padding: '8px 14px', textDecoration: 'none' }}>
+            <Icon d={['M12 15V3', 'M7 10l5 5 5-5', 'M4 21h16']} size={15} width={2} />
+            Unduh
+          </a>
+          <button onClick={onClose} className="hv-icon-btn" style={{ width: 36, height: 36, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', flex: 'none' }}>
+            <Icon d="M6 6l12 12M18 6L6 18" size={18} width={2.2} />
+          </button>
+        </div>
+        <div style={{ flex: 1, minHeight: 0, background: image ? '#0F172A' : '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: image ? 12 : 0 }}>
+          {image ? (
+            <img src={doc.dataUrl} alt={doc.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 6 }} />
+          ) : pdf ? (
+            <iframe title={doc.name} src={doc.dataUrl} style={{ width: '100%', height: '100%', border: 'none' }} />
           ) : (
-            <div style={{ textAlign: 'center', padding: '30px 10px', color: '#64748B' }}>
-              <Icon d={['M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z', 'M14 2v6h6']} size={40} width={1.5} style={{ color: '#CBD5E1' }} />
-              <div style={{ fontSize: 13, marginTop: 10 }}>Pratinjau tidak tersedia untuk tipe file ini.</div>
-              <a href={preview.dataUrl} download={preview.name} style={{ display: 'inline-block', marginTop: 14, background: '#1E3A8A', color: '#fff', fontSize: 13, fontWeight: 700, padding: '10px 18px', borderRadius: 11, textDecoration: 'none' }}>
-                Unduh file
-              </a>
+            <div style={{ textAlign: 'center', color: '#64748B', padding: 40 }}>
+              <Icon d={['M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z', 'M14 2v6h6']} size={48} width={1.4} style={{ color: '#CBD5E1' }} />
+              <div style={{ fontSize: 14, marginTop: 12 }}>Pratinjau tidak tersedia untuk tipe file ini.</div>
+              <a href={doc.dataUrl} download={doc.name} style={{ display: 'inline-block', marginTop: 16, background: '#1E3A8A', color: '#fff', fontSize: 13, fontWeight: 700, padding: '10px 20px', borderRadius: 11, textDecoration: 'none' }}>Unduh file</a>
             </div>
           )}
-        </Modal>
-      )}
+        </div>
+      </div>
     </div>
   )
 }
