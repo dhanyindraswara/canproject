@@ -1,66 +1,75 @@
 # HoldingOS — Manajemen Multi-Perusahaan
 
-Aplikasi manajemen & monitoring **multi-perusahaan** untuk group holding yang
-bergerak di bidang general supplier, pengadaan barang/jasa, dan konstruksi.
-UI dalam **Bahasa Indonesia**, tema navy enterprise, font Plus Jakarta Sans.
+Aplikasi manajemen & monitoring **multi-perusahaan** untuk group holding
+(general supplier, pengadaan barang/jasa, konstruksi). UI Bahasa Indonesia,
+tema navy enterprise.
 
-This is a React + Vite + TypeScript implementation of the HoldingOS design
-prototype (see [`DESIGN_HANDOFF.md`](./DESIGN_HANDOFF.md) and the original
-mockups under [`project/`](./project/)).
+🔗 **Live:** https://dhanyindraswara.github.io/canproject/
+
+Dibuat dengan **React + Vite + TypeScript**, di-host di **GitHub Pages**, dan
+didukung backend **Firebase** (Authentication + Firestore + Cloud Storage).
+Tanpa Firebase, aplikasi tetap jalan dalam **mode lokal** (data di
+`localStorage`) sebagai fallback.
+
+## Dokumentasi
+
+| Dokumen | Untuk siapa | Isi |
+| --- | --- | --- |
+| 📘 [`docs/USER_GUIDE.md`](./docs/USER_GUIDE.md) | Pengguna | Cara login, tiap menu, dokumen, export PDF, user & role |
+| 🏗️ [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) | Developer | Arsitektur, diagram alur, model data, cara extend |
+| 🔥 [`FIREBASE_SETUP.md`](./FIREBASE_SETUP.md) | Admin | Setup project Firebase dari nol |
 
 ## Konsep inti
 
-- **Single login, multi-company.** Perusahaan bukan menu/login terpisah —
-  perusahaan adalah **filter global** lewat Company Switcher di header.
-  Memilih "Semua Perusahaan" mengaktifkan mode holding (CEO, read-only).
-- Setiap baris transaksi menampilkan **badge perusahaan** dengan warna
-  konsisten (KPS biru, MSN cyan, BCK ungu).
+- **Single login, multi-company.** Perusahaan bukan login terpisah — melainkan
+  **filter global** lewat Company Switcher di header. "Semua Perusahaan" =
+  mode holding.
 - Navigasi **project-centric**: Tender → Proyek (PO Client) → Sales Order →
   BAST (tutup SO) → BAPP (tutup Proyek) → Invoice → Payment.
+- Data & dokumen **tersimpan di cloud** (Firestore + Storage) saat Firebase
+  aktif; role mengatur landing page & menu yang tampil.
 
-## Halaman
+```mermaid
+flowchart LR
+  T["Tender menang"] -->|konversi| P["Proyek / PO Client"]
+  P --> SO["Sales Order"]
+  SO --> MS["Milestone / progress"]
+  SO --> POK["PO Keluar ke supplier"]
+  SO --> BAST["BAST — tutup SO"]
+  P --> INV["Invoice"] --> PAY["Payment"]
+  P --> BAPP["BAPP — tutup Proyek"]
+```
 
-| Menu | Isi |
-| --- | --- |
-| **Login** | Pemilihan role demo — tiap role mendarat di halaman berbeda |
-| **Dashboard Holding** | KPI, combo chart cash flow (filter per PT), revenue antar-perusahaan (drill-down), donut AR aging, funnel tender, tabel SO delay |
-| **Tender** | Kanban 6 kolom; card "Menang" bisa dikonversi jadi Proyek |
-| **Proyek** | List (search / filter status / pagination) + Detail hub (tab Ringkasan, Sales Order, Keuangan, Invoice, Payment, BAPP) |
-| **SO Detail** | Tab Progress & Milestone, PO Keluar, Keuangan, BAST (stepper + checklist) |
-| **Warehouse & Aset** | Stok (badge di bawah minimum, Stock In/Out) + Aset |
-| **Master Data** | Perusahaan, Client, Supplier/Subcont, Item/Material, Rekening Bank |
-| **User & Akses** | Tabel user + scope perusahaan + matriks hak akses |
-| **Finance** | Semua Invoice & Semua PO Keluar (flat, lintas proyek) |
-
-## Fitur fungsional
-
-Selain filter global via Company Switcher, sudah berfungsi penuh:
-
-- Pencarian tabel Proyek (no. PO / nama / client) dan Invoice.
-- Filter status Proyek (multi-select) + pagination.
-- Filter perusahaan pada Tender, Proyek, Warehouse, Invoice.
-
-Tombol aksi (Buat BAPP, Stock In/Out, Tender Baru, dll.) memunculkan toast —
-data bersifat statis (demo), belum ada persistensi.
-
-## Menjalankan
+## Menjalankan (developer)
 
 ```bash
 npm install
 npm run dev        # dev server (http://localhost:5173)
-npm run build      # typecheck + production build ke dist/
+npm run build      # typecheck (tsc -b) + production build ke dist/
 npm run preview    # preview hasil build
 ```
 
-## Struktur
+Base path produksi = `/canproject/` (lihat `vite.config.ts`), sesuai subpath
+GitHub Pages.
+
+## Struktur singkat
 
 ```
 src/
-  main.tsx            # entry point
-  App.tsx             # shell + routing antar screen
-  store.tsx           # state global (role, company, menu, tab, toast)
-  theme.ts            # token warna, map perusahaan/status/role, format Rupiah
-  data.ts             # data dummy Indonesia + turunan Sales Order
-  components/         # Sidebar, Header, Toast, primitif UI (badge, tabs, dsb.)
-  screens/            # satu file per halaman
+  main.tsx            entry point
+  App.tsx             providers + routing + resolusi role saat login
+  store.tsx           state navigasi & auth (AppProvider)
+  dataStore.tsx       semua data bisnis + sinkron Firestore/Storage (DataProvider)
+  firebase.ts         inisialisasi Firebase (Auth/Firestore/Storage)
+  firebaseConfig.ts   konfigurasi project (public client config)
+  roles.ts            pemetaan role → landing & visibilitas menu
+  theme.ts            token warna, perusahaan/status/role, format Rupiah
+  data.ts             seed data + tipe
+  components/         Sidebar, Header, Toast, Modal/DocumentManager/DocViewer, ui
+  screens/            satu file per halaman
+firestore.rules       security rules Firestore
+storage.rules         security rules Cloud Storage
+.github/workflows/    deploy.yml (CI/CD ke GitHub Pages)
 ```
+
+Lihat [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) untuk diagram lengkap.
