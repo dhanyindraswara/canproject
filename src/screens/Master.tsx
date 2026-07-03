@@ -4,7 +4,7 @@
 
 import { useState, type ReactNode } from 'react'
 import { useApp } from '../store'
-import { CO } from '../theme'
+import { COMPANY_COLORS, type Company } from '../theme'
 import { useData, type CollKey } from '../dataStore'
 import { CompanyBadge, Tabs } from '../components/ui'
 import {
@@ -93,6 +93,36 @@ export default function Master() {
 
   // editing: which tab config + row id (null = adding) + working values
   const [editing, setEditing] = useState<{ tabKey: string; id: string | null; values: Record<string, string> } | null>(null)
+  // company editing (special form with a color picker)
+  const [coEdit, setCoEdit] = useState<{ id: string | null; short: string; name: string; bidang: string; colorIdx: number } | null>(null)
+
+  const companies = rows<Company & { id: string }>('companies')
+
+  const openCompanyForm = (c?: Company) => {
+    const idx = c ? Math.max(0, COMPANY_COLORS.findIndex((x) => x.color === c.color)) : companies.length % COMPANY_COLORS.length
+    setCoEdit({ id: c?.id ?? null, short: c?.short ?? '', name: c?.name ?? '', bidang: c?.bidang ?? '', colorIdx: idx })
+  }
+
+  const saveCompany = () => {
+    if (!coEdit) return
+    if (!coEdit.name.trim() || !coEdit.short.trim()) {
+      toast('Nama & kode perusahaan wajib diisi')
+      return
+    }
+    const preset = COMPANY_COLORS[coEdit.colorIdx] || COMPANY_COLORS[0]
+    if (coEdit.id) {
+      updateRow('companies', coEdit.id, { short: coEdit.short.trim().toUpperCase(), name: coEdit.name.trim(), bidang: coEdit.bidang.trim(), color: preset.color, bg: preset.bg })
+      toast('Perusahaan diperbarui')
+    } else {
+      const base = coEdit.short.trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) || 'co'
+      let id = base
+      let k = 1
+      while (companies.some((x) => x.id === id)) id = base + ++k
+      addRow('companies', { id, short: coEdit.short.trim().toUpperCase(), name: coEdit.name.trim(), bidang: coEdit.bidang.trim(), color: preset.color, bg: preset.bg })
+      toast('Perusahaan ditambahkan')
+    }
+    setCoEdit(null)
+  }
 
   const openForm = (tabKey: string, row?: Record<string, unknown>) => {
     const cfg = CONFIG[tabKey]
@@ -139,7 +169,11 @@ export default function Master() {
           <div style={{ fontSize: 12, fontWeight: 700, color: '#1E3A8A', textTransform: 'uppercase', letterSpacing: '.08em' }}>Master Data</div>
           <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.02em', margin: '6px 0 0' }}>Data referensi grup</h1>
         </div>
-        {state.masterTab !== 'perusahaan' && <AddButton label={`Tambah ${CONFIG[state.masterTab]?.title || ''}`} onClick={() => openForm(state.masterTab)} />}
+        {state.masterTab === 'perusahaan' ? (
+          <AddButton label="Tambah Perusahaan" onClick={() => openCompanyForm()} />
+        ) : (
+          <AddButton label={`Tambah ${CONFIG[state.masterTab]?.title || ''}`} onClick={() => openForm(state.masterTab)} />
+        )}
       </div>
 
       <Tabs tabs={MASTER_TABS} active={state.masterTab} onChange={(k) => set({ masterTab: k })} wrap fontSize={14} padding="11px 18px" marginBottom={20} />
@@ -147,16 +181,21 @@ export default function Master() {
       {state.masterTab === 'perusahaan' && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 }}>
-            {Object.values(CO).map((c) => (
-              <div key={c.id} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: 20 }}>
+            {companies.map((c) => (
+              <div key={c.id} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, padding: 20, position: 'relative' }}>
+                <div style={{ position: 'absolute', top: 14, right: 14, display: 'flex', gap: 6 }}>
+                  <RowAction kind="edit" title="Edit perusahaan" onClick={() => openCompanyForm(c)} />
+                  <RowAction kind="delete" title="Hapus perusahaan" onClick={() => { removeRow('companies', c.id); toast('Perusahaan dihapus') }} />
+                </div>
                 <div style={{ width: 48, height: 48, borderRadius: 12, background: c.bg, color: c.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 16, marginBottom: 14 }}>{c.short}</div>
                 <div style={{ fontSize: 15, fontWeight: 800, lineHeight: 1.3 }}>{c.name}</div>
                 <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 4 }}>{c.bidang}</div>
               </div>
             ))}
+            {companies.length === 0 && <div style={{ gridColumn: '1/-1', padding: '30px', textAlign: 'center', color: '#94A3B8', fontWeight: 600, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16 }}>Belum ada perusahaan. Klik “Tambah Perusahaan”.</div>}
           </div>
           <div style={{ fontSize: 12.5, color: '#94A3B8', marginTop: 14 }}>
-            Perusahaan adalah entitas struktural holding (dipakai untuk pewarnaan &amp; filter di seluruh aplikasi) sehingga bersifat tetap. Kelola Client, Supplier, Item, dan Rekening Bank di tab lainnya.
+            Perusahaan dipakai untuk pewarnaan &amp; filter di seluruh aplikasi. Menambah / mengubah di sini langsung tampil pada Company Switcher dan seluruh badge PT.
           </div>
         </>
       )}
@@ -249,6 +288,54 @@ export default function Master() {
               })}
             </FieldRow>
           ))}
+        </Modal>
+      )}
+
+      {coEdit && (
+        <Modal
+          title={`${coEdit.id ? 'Edit' : 'Tambah'} Perusahaan`}
+          onClose={() => setCoEdit(null)}
+          footer={
+            <>
+              <GhostButton onClick={() => setCoEdit(null)}>Batal</GhostButton>
+              <PrimaryButton onClick={saveCompany}>Simpan</PrimaryButton>
+            </>
+          }
+        >
+          <FieldRow>
+            <Field label="Kode (mis. KPS)" value={coEdit.short} onChange={(v) => setCoEdit({ ...coEdit, short: v })} placeholder="KPS" />
+            <Field label="Bidang Usaha" value={coEdit.bidang} onChange={(v) => setCoEdit({ ...coEdit, bidang: v })} placeholder="General Supplier" />
+          </FieldRow>
+          <div style={{ marginBottom: 14 }}>
+            <Field label="Nama Perusahaan" value={coEdit.name} onChange={(v) => setCoEdit({ ...coEdit, name: v })} placeholder="PT Karya Prima Sejahtera" />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 8 }}>Warna Brand</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {COMPANY_COLORS.map((p, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCoEdit({ ...coEdit, colorIdx: i })}
+                  title={p.color}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    background: p.bg,
+                    color: p.color,
+                    fontWeight: 800,
+                    fontSize: 12,
+                    border: coEdit.colorIdx === i ? `2px solid ${p.color}` : '2px solid transparent',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {(coEdit.short || 'PT').slice(0, 3).toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
         </Modal>
       )}
     </div>

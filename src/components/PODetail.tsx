@@ -4,7 +4,7 @@
 import { useState, type ReactNode } from 'react'
 import { co, fmt, fmtC } from '../theme'
 import { useApp } from '../store'
-import { useData, type POKeluarRow } from '../dataStore'
+import { makeNo, useData, type POKeluarRow } from '../dataStore'
 import { StatusBadge } from './ui'
 import { CompanySelect, Field, FieldRow, GhostButton, Modal, NumberField, PrimaryButton, SelectField } from './Modal'
 import { printDocument } from '../print'
@@ -13,7 +13,7 @@ const PO_STATUSES = ['Draft', 'Dikirim', 'Diterima']
 
 export function POFormModal({ defaultCo, onClose }: { defaultCo: string; onClose: () => void }) {
   const { toast } = useApp()
-  const { addRow } = useData()
+  const { rows, addRow } = useData()
   const [form, setForm] = useState({ no: '', supplier: '', co: defaultCo, nilai: '', status: 'Draft', due: '' })
 
   const submit = () => {
@@ -21,8 +21,9 @@ export function POFormModal({ defaultCo, onClose }: { defaultCo: string; onClose
       toast('Supplier & nilai wajib diisi')
       return
     }
+    const short = co(form.co).short
     addRow('poKeluar', {
-      no: form.no.trim() || `POK-2026/${co(form.co).short}/${Math.floor(10 + Math.random() * 990)}`,
+      no: form.no.trim() || makeNo(rows<POKeluarRow>('poKeluar').map((x) => x.no), short, (seq) => `POK-2026/${short}/${seq}`),
       supplier: form.supplier.trim(),
       co: form.co,
       nilai: Number(form.nilai) || 0,

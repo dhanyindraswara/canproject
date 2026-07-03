@@ -15,6 +15,7 @@ export interface Proyek {
   so: number
   masuk: number
   keluar: number
+  bappStep?: number // BAPP pipeline step (0-4); undefined = not started
 }
 
 export interface Tender {
@@ -72,6 +73,14 @@ export interface Aset {
   co: string
   kondisi: string
   pic: string
+  nilai: number
+}
+
+export interface Milestone {
+  id: string
+  label: string
+  pct: number
+  status: string
 }
 
 export interface UserRow {
@@ -168,11 +177,11 @@ export const stok: Stok[] = [
 ]
 
 export const aset: Aset[] = [
-  { kode: 'AST-001', nama: 'Excavator Komatsu PC200', jenis: 'Alat Berat', co: 'bck', kondisi: 'Baik', pic: 'Rudi Hartono' },
-  { kode: 'AST-004', nama: 'Truck Hino Dutra', jenis: 'Kendaraan', co: 'kps', kondisi: 'Baik', pic: 'Agus Salim' },
-  { kode: 'AST-009', nama: 'Genset Portable 50kVA', jenis: 'Peralatan', co: 'msn', kondisi: 'Perlu Servis', pic: 'Bayu Prakoso' },
-  { kode: 'AST-012', nama: 'Concrete Mixer', jenis: 'Alat Berat', co: 'bck', kondisi: 'Baik', pic: 'Rudi Hartono' },
-  { kode: 'AST-015', nama: 'Forklift Toyota 3T', jenis: 'Peralatan', co: 'kps', kondisi: 'Rusak Ringan', pic: 'Agus Salim' },
+  { kode: 'AST-001', nama: 'Excavator Komatsu PC200', jenis: 'Alat Berat', co: 'bck', kondisi: 'Baik', pic: 'Rudi Hartono', nilai: 1850000000 },
+  { kode: 'AST-004', nama: 'Truck Hino Dutra', jenis: 'Kendaraan', co: 'kps', kondisi: 'Baik', pic: 'Agus Salim', nilai: 420000000 },
+  { kode: 'AST-009', nama: 'Genset Portable 50kVA', jenis: 'Peralatan', co: 'msn', kondisi: 'Perlu Servis', pic: 'Bayu Prakoso', nilai: 175000000 },
+  { kode: 'AST-012', nama: 'Concrete Mixer', jenis: 'Alat Berat', co: 'bck', kondisi: 'Baik', pic: 'Rudi Hartono', nilai: 95000000 },
+  { kode: 'AST-015', nama: 'Forklift Toyota 3T', jenis: 'Peralatan', co: 'kps', kondisi: 'Rusak Ringan', pic: 'Agus Salim', nilai: 310000000 },
 ]
 
 export const users: UserRow[] = [
@@ -204,6 +213,17 @@ export const banks: Bank[] = [
   { bank: 'Bank Mandiri', rek: '140-0022-2210', an: 'PT Mandiri Supply Nusantara', co: 'msn' },
   { bank: 'Bank Negara Indonesia', rek: '088-5512-0091', an: 'PT Bangun Cipta Konstruksi', co: 'bck' },
 ]
+
+// Default milestone template used when seeding / creating a Sales Order.
+export function defaultMilestones(): Omit<Milestone, 'id'>[] {
+  return [
+    { label: 'Kick-off & Shop Drawing', pct: 100, status: 'Selesai' },
+    { label: 'Fabrikasi Material', pct: 100, status: 'Selesai' },
+    { label: 'Delivery ke Lokasi', pct: 80, status: 'Berjalan' },
+    { label: 'Instalasi & Wiring', pct: 45, status: 'Berjalan' },
+    { label: 'Testing & Commissioning', pct: 0, status: 'Menunggu' },
+  ]
+}
 
 // Derives the Sales Orders for a given project — mirrors soFor() in the source.
 export function soFor(projId: string): SalesOrder[] {

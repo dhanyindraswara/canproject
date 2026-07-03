@@ -5,7 +5,7 @@
 import { useState } from 'react'
 import { useApp } from '../store'
 import { co, curCoName, fmtC } from '../theme'
-import { useData, type TenderRow } from '../dataStore'
+import { makeNo, useData, type ProyekRow, type TenderRow } from '../dataStore'
 import {
   AddButton,
   CompanySelect,
@@ -60,9 +60,10 @@ export default function Tender() {
   }
 
   const convert = (t: TenderRow) => {
-    const suffix = t.co.toUpperCase()
+    const short = co(t.co).short
+    const no = makeNo(rows<ProyekRow>('projects').map((p) => p.no), short, (seq) => `PO-2026/${short}/${seq}`)
     addRow('projects', {
-      no: `PO-2026/${suffix}/${Math.floor(100 + Math.random() * 900)}`,
+      no,
       name: t.name,
       client: t.client,
       co: t.co,

@@ -4,7 +4,7 @@
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from './ui'
-import { co, CO } from '../theme'
+import { allCompanies, co } from '../theme'
 import { fileToDataUrl, formatBytes, useData, type DocItem } from '../dataStore'
 import { useApp } from '../store'
 
@@ -279,7 +279,7 @@ export function CompanySelect({ label = 'Perusahaan', value, onChange }: { label
       label={label}
       value={value}
       onChange={onChange}
-      options={Object.values(CO).map((c) => ({ value: c.id, label: `${c.short} · ${c.name}` }))}
+      options={allCompanies().map((c) => ({ value: c.id, label: `${c.short} · ${c.name}` }))}
     />
   )
 }

@@ -4,12 +4,14 @@
 
 import { useState, type ReactNode } from 'react'
 import { useApp } from '../store'
-import { co, fmtC, stt } from '../theme'
-import { soForProject } from '../data'
-import { useData, type InvoiceRow, type PaymentRow, type ProyekRow } from '../dataStore'
+import { co, fmt, fmtC, stt } from '../theme'
+import { defaultMilestones } from '../data'
+import { printDocument } from '../print'
+import { fileToDataUrl, makeNo, useData, type InvoiceRow, type PaymentRow, type ProyekRow, type SalesOrderRow } from '../dataStore'
 import { Icon, StatusBadge, Tabs } from '../components/ui'
 import {
   AddButton,
+  DocCountBadge,
   DocumentManager,
   Field,
   FieldRow,
@@ -39,7 +41,7 @@ const th = { fontWeight: 700, padding: '11px 8px' } as const
 
 export default function ProyekDetail() {
   const { state, set, openSO, toast } = useApp()
-  const { rows, addRow, removeRow, notesFor, addNote, removeNote } = useData()
+  const { rows, addRow, updateRow, removeRow, notesFor, addNote, removeNote, addDoc } = useData()
 
   const projects = rows<ProyekRow>('projects')
   const P0 = projects.find((x) => x.id === state.detailProyek) || projects[0]
@@ -47,23 +49,48 @@ export default function ProyekDetail() {
   const pst = stt(P0.status)
   const margin = P0.masuk - P0.keluar
   const marginPct = (P0.masuk > 0 ? Math.round((margin / P0.masuk) * 100) : 0) + '%'
-  const sos = soForProject(P0)
-  const allSODone = sos.every((so) => so.status === 'Selesai')
+  const sos = rows<SalesOrderRow>('salesOrders').filter((s) => s.projId === P0.id)
+  const allSODone = sos.length > 0 && sos.every((so) => so.status === 'Selesai')
 
   const scope = `proyek:${P0.id}`
 
-  const bappIdx = P0.status === 'Closed' ? 4 : P0.status === 'BAPP' ? 2 : -1
+  const bappIdx = P0.bappStep ?? (P0.status === 'Closed' ? 4 : P0.status === 'BAPP' ? 2 : -1)
   const bappExists = bappIdx >= 0
-  const bappNo = 'BAPP-2025/' + pc.short + '/' + P0.no.split('/')[2]
-  const bappHistory = (
-    bappIdx < 0
-      ? []
-      : [
-          { status: 'Draft dibuat', date: '20 Jun 2026 · 09:14', pic: 'Dodi Firmansyah' },
-          { status: 'Diajukan ke client', date: '21 Jun 2026 · 14:30', pic: 'Dodi Firmansyah' },
-          { status: 'Ditinjau client', date: '24 Jun 2026 · 10:05', pic: 'PT PLN — Ir. Bambang S.' },
-        ]
-  ).slice(0, bappIdx + 1)
+  const bappNo = 'BAPP-2026/' + pc.short + '/' + (P0.no.split('/').pop() || '001')
+
+  const setBappStep = (idx: number) => {
+    updateRow('projects', P0.id, {
+      bappStep: idx,
+      status: idx >= 4 ? 'Closed' : idx >= 0 ? 'BAPP' : P0.status,
+      progress: idx >= 4 ? 100 : P0.progress,
+    })
+    toast(idx >= 4 ? 'BAPP selesai — proyek ditutup (Closed)' : `Status BAPP: ${BAPP_STEP_LABELS[idx]}`)
+  }
+
+  const generateBapp = () => {
+    const ok = printDocument({
+      title: 'Berita Acara Penyelesaian Pekerjaan',
+      docNo: bappNo,
+      company: pc.name,
+      meta: [
+        { label: 'No. BAPP', value: bappNo },
+        { label: 'No. PO / Proyek', value: P0.no },
+        { label: 'Proyek', value: P0.name },
+        { label: 'Dari', value: pc.name },
+        { label: 'Kepada', value: P0.client },
+        { label: 'Nilai Kontrak', value: fmt(P0.nilai) },
+        { label: 'Status', value: bappIdx >= 0 ? BAPP_STEP_LABELS[bappIdx] : 'Draft' },
+      ],
+      tableTitle: 'Ringkasan Penyelesaian',
+      tableRows: [
+        { label: `Progress proyek`, value: `${P0.progress}%` },
+        { label: `Jumlah Sales Order selesai`, value: `${sos.filter((s) => s.status === 'Selesai').length}/${sos.length}` },
+        { label: 'Nilai Kontrak', value: fmt(P0.nilai) },
+      ],
+      footnote: 'Dengan ditandatanganinya BAPP ini, seluruh pekerjaan pada PO/Proyek di atas dinyatakan selesai dan diterima.',
+    })
+    if (!ok) toast('Popup diblokir browser — izinkan popup untuk ekspor PDF')
+  }
 
   const pkBudget = [
     { label: 'Nilai Kontrak', v: P0.nilai, color: '#1E3A8A', w: 100 },
@@ -80,6 +107,61 @@ export default function ProyekDetail() {
   const [invOpen, setInvOpen] = useState(false)
   const [invForm, setInvForm] = useState({ no: '', nilai: '', tgl: '', due: '', status: 'Terbit' })
   const [noteText, setNoteText] = useState('')
+  const [soOpen, setSoOpen] = useState(false)
+  const [soForm, setSoForm] = useState({ scope: '', nilai: '', target: '', status: 'Berjalan' })
+  const [payOpen, setPayOpen] = useState(false)
+  const [payForm, setPayForm] = useState({ inv: '', nilai: '', tgl: '', metode: 'Transfer', bank: '' })
+  const [payFiles, setPayFiles] = useState<File[]>([])
+  const [docPay, setDocPay] = useState<PaymentRow | null>(null)
+
+  const submitPayment = async () => {
+    if (!payForm.nilai) {
+      toast('Nilai pembayaran wajib diisi')
+      return
+    }
+    const no = makeNo(rows<PaymentRow>('payments').map((p) => p.no), pc.short, (seq) => `RCV-2026/${seq}`)
+    const id = addRow('payments', {
+      no,
+      inv: payForm.inv || pdInvoices[0]?.no || '—',
+      co: P0.co,
+      nilai: Number(payForm.nilai) || 0,
+      tgl: payForm.tgl.trim() || new Date().toLocaleDateString('id-ID', { dateStyle: 'medium' }),
+      metode: payForm.metode,
+      bank: payForm.bank.trim() || '—',
+    })
+    for (const f of payFiles) {
+      if (f.size > 4 * 1024 * 1024) continue
+      const dataUrl = await fileToDataUrl(f)
+      addDoc({ scope: `payment:${id}`, name: f.name, mime: f.type || 'application/octet-stream', size: f.size, dataUrl, category: 'Bukti Bayar', note: '' })
+    }
+    setPayForm({ inv: '', nilai: '', tgl: '', metode: 'Transfer', bank: '' })
+    setPayFiles([])
+    setPayOpen(false)
+    toast('Pembayaran dicatat' + (payFiles.length ? ` + ${payFiles.length} dokumen` : ''))
+  }
+
+  const submitSO = () => {
+    if (!soForm.scope.trim()) {
+      toast('Scope pekerjaan wajib diisi')
+      return
+    }
+    const allNos = rows<SalesOrderRow>('salesOrders').map((s) => s.no)
+    const no = makeNo(allNos, pc.short, (seq) => `SO-${pc.short}-${seq}`)
+    addRow('salesOrders', {
+      projId: P0.id,
+      no,
+      scope: soForm.scope.trim(),
+      nilai: Number(soForm.nilai) || 0,
+      progress: 0,
+      status: soForm.status,
+      target: soForm.target.trim() || '—',
+      bastStep: 0,
+      milestones: defaultMilestones().map((m, j) => ({ ...m, pct: 0, status: 'Menunggu', id: `${P0.id}-new-${Date.now()}-${j}` })),
+    })
+    setSoForm({ scope: '', nilai: '', target: '', status: 'Berjalan' })
+    setSoOpen(false)
+    toast('Sales Order baru dibuat')
+  }
 
   const submitInvoice = () => {
     if (!invForm.nilai) {
@@ -87,7 +169,7 @@ export default function ProyekDetail() {
       return
     }
     addRow('invoices', {
-      no: invForm.no.trim() || `INV-2026/${pc.short}/${Math.floor(100 + Math.random() * 900)}`,
+      no: invForm.no.trim() || makeNo(rows<InvoiceRow>('invoices').map((x) => x.no), pc.short, (seq) => `INV-2026/${pc.short}/${seq}`),
       proj: P0.name,
       co: P0.co,
       nilai: Number(invForm.nilai) || 0,
@@ -197,7 +279,7 @@ export default function ProyekDetail() {
           <div style={{ paddingTop: 22 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <div style={{ fontSize: 14, fontWeight: 800 }}>Sales Order turunan PO ini</div>
-              <button onClick={() => toast('Fitur SO Baru menyusul — SO saat ini diturunkan otomatis dari nilai PO')} style={softBtn}>+ SO Baru</button>
+              <button onClick={() => setSoOpen(true)} style={softBtn}>+ SO Baru</button>
             </div>
             {sos.length === 0 ? (
               <EmptyLine text="Belum ada Sales Order untuk proyek ini." />
@@ -326,8 +408,12 @@ export default function ProyekDetail() {
         {/* Payment */}
         {tab === 'payment' && (
           <div style={{ paddingTop: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div style={{ fontSize: 14, fontWeight: 800 }}>Pembayaran diterima</div>
+              <AddButton label="Payment Baru" onClick={() => setPayOpen(true)} />
+            </div>
             {pdPayments.length === 0 ? (
-              <EmptyLine text="Belum ada pembayaran diterima untuk invoice proyek ini." />
+              <EmptyLine text="Belum ada pembayaran. Klik “Payment Baru” untuk mencatat penerimaan." />
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
@@ -338,6 +424,7 @@ export default function ProyekDetail() {
                     <th style={th}>Tanggal</th>
                     <th style={th}>Metode</th>
                     <th style={th}>Bank</th>
+                    <th style={{ ...th, textAlign: 'center' }}>Bukti</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -349,6 +436,9 @@ export default function ProyekDetail() {
                       <td style={{ padding: '13px 8px', color: '#64748B' }}>{p.tgl}</td>
                       <td style={{ padding: '13px 8px', color: '#475569' }}>{p.metode}</td>
                       <td style={{ padding: '13px 8px', color: '#64748B' }}>{p.bank}</td>
+                      <td style={{ padding: '13px 8px', textAlign: 'center' }}>
+                        <button onClick={() => setDocPay(p)} title="Dokumen pendukung"><DocCountBadge scope={`payment:${p.id}`} /></button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -401,23 +491,38 @@ export default function ProyekDetail() {
         {/* BAPP */}
         {tab === 'bapp' && (
           <div style={{ paddingTop: 22 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 14, padding: '16px 20px', marginBottom: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 14, padding: '16px 20px', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 800 }}>Berita Acara Penyelesaian Pekerjaan (BAPP)</div>
-                <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 3 }}>Dokumen penutup PO/Proyek — mengubah status Proyek menjadi Closed.</div>
+                <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 3 }}>Dokumen penutup PO/Proyek — selesaikan pipeline untuk menutup proyek (Closed).</div>
               </div>
-              <BuatBappButton projId={P0.id} allSODone={allSODone} statusColor={pst.c} closed={P0.status === 'Closed'} />
+              <div style={{ display: 'flex', gap: 10 }}>
+                {!bappExists && (
+                  <button onClick={() => setBappStep(0)} className="hv-brighten" style={{ fontSize: 13, fontWeight: 700, padding: '10px 18px', borderRadius: 11, background: '#1E3A8A', color: '#fff' }}>Buat BAPP</button>
+                )}
+                <button onClick={generateBapp} className="hv-btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8, background: bappExists ? '#1E3A8A' : '#fff', color: bappExists ? '#fff' : '#1E3A8A', border: bappExists ? 'none' : '1px solid #C7D2FE', fontSize: 13, fontWeight: 700, padding: '10px 16px', borderRadius: 11 }}>
+                  <Icon d={['M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z', 'M14 2v6h6']} size={16} width={1.9} />
+                  Generate BAPP PDF
+                </button>
+              </div>
             </div>
-            {allSODone && P0.status !== 'Closed' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 600, color: '#059669', background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 10, padding: '10px 14px', marginBottom: 20 }}>
-                ✓ Semua SO sudah ber-BAST — BAPP dapat dibuat.
-              </div>
-            )}
-            {bappExists && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 24, marginBottom: 24 }}>
+
+            {bappExists ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 14 }}>Status Pipeline</div>
-                  <Stepper labels={BAPP_STEP_LABELS} idx={bappIdx} lineHeight={26} />
+                  <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 14 }}>Status Pipeline — klik untuk memperbarui</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {BAPP_STEP_LABELS.map((label, i) => {
+                      const done = i < bappIdx
+                      const cur = i === bappIdx
+                      return (
+                        <button key={i} onClick={() => setBappStep(i)} style={{ display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', padding: '11px 14px', borderRadius: 11, border: `1px solid ${cur ? '#1E3A8A' : '#E2E8F0'}`, background: cur ? '#EEF2FF' : done ? '#ECFDF5' : '#fff' }}>
+                          <span style={{ width: 26, height: 26, borderRadius: '50%', flex: 'none', background: done ? '#059669' : cur ? '#1E3A8A' : '#E2E8F0', color: done || cur ? '#fff' : '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800 }}>{done ? '✓' : i + 1}</span>
+                          <span style={{ fontSize: 13.5, fontWeight: 700, color: cur ? '#1E3A8A' : '#334155' }}>{label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 14 }}>Dokumen BAPP</div>
@@ -427,9 +532,16 @@ export default function ProyekDetail() {
                     <DocRow label="Kepada" value={P0.client} />
                     <DocRow label="Nilai" value={<span style={{ color: '#1E3A8A' }}>{fmtC(P0.nilai)}</span>} last />
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 800, margin: '18px 0 12px' }}>Riwayat Status</div>
-                  <History items={bappHistory} />
+                  {!allSODone && (
+                    <div style={{ fontSize: 12, color: '#D97706', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 10, padding: '10px 12px', marginTop: 12 }}>
+                      Catatan: masih ada SO yang belum ber-BAST. Anda tetap dapat memproses BAPP.
+                    </div>
+                  )}
                 </div>
+              </div>
+            ) : (
+              <div style={{ padding: '28px', textAlign: 'center', color: '#94A3B8', fontWeight: 600, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, marginBottom: 24 }}>
+                BAPP belum dibuat. Klik “Buat BAPP” untuk memulai pipeline penutupan proyek.
               </div>
             )}
             <DocumentManager scope={`${scope}:bapp`} title="Lampiran BAPP & Berita Acara" />
@@ -458,6 +570,72 @@ export default function ProyekDetail() {
             <Field label="Jatuh Tempo" value={invForm.due} onChange={(v) => setInvForm({ ...invForm, due: v })} placeholder="mis. 02 Agu 2026" />
           </FieldRow>
           <SelectField label="Status" value={invForm.status} onChange={(v) => setInvForm({ ...invForm, status: v })} options={INVOICE_STATUSES.map((s) => ({ value: s, label: s }))} />
+        </Modal>
+      )}
+
+      {soOpen && (
+        <Modal
+          title="Sales Order Baru"
+          subtitle={`Turunan dari ${P0.no}`}
+          onClose={() => setSoOpen(false)}
+          footer={
+            <>
+              <GhostButton onClick={() => setSoOpen(false)}>Batal</GhostButton>
+              <PrimaryButton onClick={submitSO}>Simpan SO</PrimaryButton>
+            </>
+          }
+        >
+          <div style={{ marginBottom: 14 }}>
+            <Field label="Scope Pekerjaan" value={soForm.scope} onChange={(v) => setSoForm({ ...soForm, scope: v })} placeholder="mis. Instalasi & Wiring di Lokasi" />
+          </div>
+          <FieldRow>
+            <NumberField label="Nilai SO (Rp)" value={soForm.nilai} onChange={(v) => setSoForm({ ...soForm, nilai: v })} placeholder="0" />
+            <Field label="Target Selesai" value={soForm.target} onChange={(v) => setSoForm({ ...soForm, target: v })} placeholder="mis. 25 Jul 2026" />
+          </FieldRow>
+          <SelectField label="Status" value={soForm.status} onChange={(v) => setSoForm({ ...soForm, status: v })} options={['Berjalan', 'BAST', 'Selesai'].map((s) => ({ value: s, label: s }))} />
+          <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 12 }}>No. SO dibuat otomatis. Milestone default akan ditambahkan dan bisa diperbarui di halaman detail SO.</div>
+        </Modal>
+      )}
+
+      {payOpen && (
+        <Modal
+          title="Payment Baru"
+          subtitle={`Catat penerimaan pembayaran · ${P0.name}`}
+          onClose={() => setPayOpen(false)}
+          footer={
+            <>
+              <GhostButton onClick={() => setPayOpen(false)}>Batal</GhostButton>
+              <PrimaryButton onClick={submitPayment}>Simpan Pembayaran</PrimaryButton>
+            </>
+          }
+        >
+          <FieldRow>
+            <SelectField
+              label="Invoice Terkait"
+              value={payForm.inv}
+              onChange={(v) => setPayForm({ ...payForm, inv: v })}
+              options={pdInvoices.length ? pdInvoices.map((i) => ({ value: i.no, label: i.no })) : [{ value: '', label: '— tidak ada invoice —' }]}
+            />
+            <NumberField label="Nilai Diterima (Rp)" value={payForm.nilai} onChange={(v) => setPayForm({ ...payForm, nilai: v })} placeholder="0" />
+          </FieldRow>
+          <FieldRow>
+            <SelectField label="Metode" value={payForm.metode} onChange={(v) => setPayForm({ ...payForm, metode: v })} options={['Transfer', 'Giro', 'Tunai'].map((m) => ({ value: m, label: m }))} />
+            <Field label="Tanggal" value={payForm.tgl} onChange={(v) => setPayForm({ ...payForm, tgl: v })} placeholder="mis. 03 Jul 2026" />
+          </FieldRow>
+          <div style={{ marginBottom: 14 }}>
+            <Field label="Bank / Rekening" value={payForm.bank} onChange={(v) => setPayForm({ ...payForm, bank: v })} placeholder="mis. BCA 217-xxx-8841" />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6 }}>Dokumen Pendukung (bukti transfer, dll)</label>
+            <input type="file" multiple onChange={(e) => setPayFiles(Array.from(e.target.files || []))} style={{ fontSize: 12.5 }} />
+            {payFiles.length > 0 && <div style={{ fontSize: 12, color: '#059669', fontWeight: 700, marginTop: 6 }}>{payFiles.length} file siap diunggah</div>}
+          </div>
+        </Modal>
+      )}
+
+      {docPay && (
+        <Modal title={`Dokumen — ${docPay.no}`} subtitle={`Pembayaran ${docPay.inv}`} onClose={() => setDocPay(null)} width={760}>
+          <DocumentManager scope={`payment:${docPay.id}`} title="Dokumen Pendukung Pembayaran" />
         </Modal>
       )}
     </div>
@@ -499,27 +677,6 @@ function DocRow({ label, value, last }: { label: string; value: ReactNode; last?
       <span style={{ color: '#64748B' }}>{label}</span>
       <span style={{ fontWeight: 800 }}>{value}</span>
     </div>
-  )
-}
-
-function BuatBappButton({ projId, allSODone, statusColor, closed }: { projId: string; allSODone: boolean; statusColor: string; closed: boolean }) {
-  const { toast } = useApp()
-  const { updateRow } = useData()
-  if (closed) {
-    return <span style={{ fontSize: 12.5, fontWeight: 700, color: '#059669', background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 10, padding: '8px 14px' }}>✓ Proyek Closed</span>
-  }
-  return (
-    <button
-      onClick={() =>
-        allSODone
-          ? (updateRow('projects', projId, { status: 'Closed', progress: 100 }), toast('BAPP dibuat — status proyek → Closed'))
-          : toast('Belum bisa: masih ada SO yang belum ber-BAST')
-      }
-      className="hv-brighten"
-      style={{ fontSize: 13, fontWeight: 700, padding: '10px 18px', borderRadius: 11, background: statusColor, color: '#fff' }}
-    >
-      Buat BAPP
-    </button>
   )
 }
 

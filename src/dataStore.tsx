@@ -28,6 +28,8 @@ import {
   clients as seedClients,
   suppliers as seedSuppliers,
   banks as seedBanks,
+  defaultMilestones,
+  soForProject,
   type Proyek,
   type Tender,
   type Invoice,
@@ -39,16 +41,24 @@ import {
   type Client,
   type Supplier,
   type Bank,
+  type Milestone,
 } from './data'
+import { CO, syncCompanies, type Company } from './theme'
 
 // Every stored row carries a stable string id for edit/delete.
 export interface WithId {
   id: string
 }
 
+export interface InvoiceItem {
+  desc: string
+  qty: number
+  price: number
+}
+
 export type ProyekRow = Proyek & WithId
 export type TenderRow = Tender & WithId
-export type InvoiceRow = Invoice & WithId
+export type InvoiceRow = Invoice & WithId & { items?: InvoiceItem[] }
 export type PaymentRow = Payment & WithId
 export type POKeluarRow = POKeluar & WithId
 export type StokRow = Stok & WithId
@@ -57,6 +67,22 @@ export type UserRowT = UserRow & WithId
 export type ClientRow = Client & WithId
 export type SupplierRow = Supplier & WithId
 export type BankRow = Bank & WithId
+export type CompanyRow = Company // Company already carries an `id`
+
+// A Sales Order is now a first-class stored entity (with editable milestones
+// and its own BAST pipeline), no longer derived on the fly.
+export type { Milestone }
+export interface SalesOrderRow extends WithId {
+  projId: string
+  no: string
+  scope: string
+  nilai: number
+  progress: number
+  status: string
+  target: string
+  milestones: Milestone[]
+  bastStep: number
+}
 
 // An uploaded document — stored inline as a base64 data URL. `scope` ties it
 // to an entity, e.g. 'proyek:p1', 'tender:t3', 'invoice:INV-...', or 'global'.
@@ -85,6 +111,7 @@ export interface NoteItem {
 export interface DataState {
   projects: ProyekRow[]
   tenders: TenderRow[]
+  salesOrders: SalesOrderRow[]
   invoices: InvoiceRow[]
   payments: PaymentRow[]
   poKeluar: POKeluarRow[]
@@ -94,6 +121,7 @@ export interface DataState {
   clients: ClientRow[]
   suppliers: SupplierRow[]
   banks: BankRow[]
+  companies: CompanyRow[]
   docs: DocItem[]
   notes: NoteItem[]
 }
@@ -101,6 +129,7 @@ export interface DataState {
 export type CollKey =
   | 'projects'
   | 'tenders'
+  | 'salesOrders'
   | 'invoices'
   | 'payments'
   | 'poKeluar'
@@ -110,6 +139,7 @@ export type CollKey =
   | 'clients'
   | 'suppliers'
   | 'banks'
+  | 'companies'
 
 const STORAGE_KEY = 'holdingos.data.v1'
 const CURRENT_USER = 'Siti Nurhaliza'
@@ -126,10 +156,35 @@ function withIds<T>(rows: T[], prefix: string): (T & WithId)[] {
   return rows.map((r, i) => ({ ...r, id: `${prefix}-seed-${i}` }))
 }
 
+// Build the seeded Sales Orders for the static projects, each with its own
+// editable milestone list and a BAST pipeline step inferred from its status.
+function seedSalesOrders(): SalesOrderRow[] {
+  const out: SalesOrderRow[] = []
+  P.forEach((p) => {
+    soForProject(p).forEach((so, i) => {
+      const bastStep = so.status === 'Selesai' ? 3 : so.status === 'BAST' ? 1 : 0
+      out.push({
+        id: `${p.id}-${so.id}`,
+        projId: p.id,
+        no: so.no,
+        scope: so.scope,
+        nilai: so.nilai,
+        progress: so.progress,
+        status: so.status,
+        target: so.target,
+        bastStep,
+        milestones: defaultMilestones().map((m, j) => ({ ...m, id: `${p.id}-${so.id}-m${j}-${i}` })),
+      })
+    })
+  })
+  return out
+}
+
 function seed(): DataState {
   return {
     projects: P.map((p) => ({ ...p })), // already has id
     tenders: withIds(seedTenders, 'tender'),
+    salesOrders: seedSalesOrders(),
     invoices: withIds(seedInv, 'inv'),
     payments: withIds(seedPay, 'pay'),
     poKeluar: withIds(seedPoKeluar, 'pok'),
@@ -139,6 +194,7 @@ function seed(): DataState {
     clients: withIds(seedClients, 'client'),
     suppliers: withIds(seedSuppliers, 'supplier'),
     banks: withIds(seedBanks, 'bank'),
+    companies: Object.values(CO).map((c) => ({ ...c })),
     docs: [],
     notes: [],
   }
@@ -198,13 +254,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, [data])
 
+  // Keep the theme company registry in sync so `co()` resolves colors for any
+  // company created/edited/deleted at runtime.
+  useEffect(() => {
+    syncCompanies(data.companies as Company[])
+  }, [data.companies])
+
   const rows = useCallback(
     <T extends WithId>(key: CollKey) => data[key] as unknown as T[],
     [data],
   )
 
   const addRow = useCallback(<T extends object>(key: CollKey, row: T) => {
-    const id = uid(key)
+    // Respect an explicit id if the caller provided one (used for companies,
+    // whose id is a slug, not a generated uid).
+    const id = (row as { id?: string }).id || uid(key)
     setData((prev) => ({ ...prev, [key]: [{ ...row, id }, ...(prev[key] as WithId[])] }) as DataState)
     return id
   }, [])
@@ -316,4 +380,19 @@ export function formatBytes(n: number): string {
   if (n >= 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + ' MB'
   if (n >= 1024) return Math.round(n / 1024) + ' KB'
   return n + ' B'
+}
+
+// Generates the next sequential document number for a company. `existing` is
+// the list of current numbers of that kind; `coShort` scopes the running count
+// per PT; `build(n)` formats the number for sequence n (3-digit padded).
+export function makeNo(existing: string[], coShort: string, build: (seq: string) => string): string {
+  const scoped = existing.filter((x) => x.includes('/' + coShort + '/') || x.includes('-' + coShort + '-'))
+  const set = new Set(existing)
+  let n = scoped.length + 1
+  let candidate = build(String(n).padStart(3, '0'))
+  while (set.has(candidate)) {
+    n += 1
+    candidate = build(String(n).padStart(3, '0'))
+  }
+  return candidate
 }

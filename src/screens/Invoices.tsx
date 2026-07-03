@@ -5,8 +5,8 @@ import { useMemo, useState } from 'react'
 import { useApp } from '../store'
 import { co, curCoName, fmt, fmtC } from '../theme'
 import { printDocument } from '../print'
-import { useData, type InvoiceRow } from '../dataStore'
-import { CompanyBadge, StatusBadge } from '../components/ui'
+import { makeNo, useData, type InvoiceItem, type InvoiceRow } from '../dataStore'
+import { CompanyBadge, Icon, StatusBadge } from '../components/ui'
 import {
   AddButton,
   CompanySelect,
@@ -24,15 +24,21 @@ import {
 
 const th = { fontWeight: 700, padding: '12px 8px' } as const
 const INVOICE_STATUSES = ['Terbit', 'Terkirim', 'Dibayar', 'Overdue']
-const emptyForm = { no: '', co: 'kps', proj: '', nilai: '', tgl: '', due: '', status: 'Terbit' }
+const freshForm = () => ({ no: '', co: 'kps', proj: '', nilai: '', tgl: '', due: '', status: 'Terbit', items: [] as InvoiceItem[] })
 
 export default function Invoices() {
   const { state, toast } = useApp()
   const { rows, addRow, removeRow } = useData()
   const [query, setQuery] = useState('')
   const [formOpen, setFormOpen] = useState(false)
-  const [form, setForm] = useState(emptyForm)
+  const [form, setForm] = useState(freshForm)
   const [docInv, setDocInv] = useState<InvoiceRow | null>(null)
+
+  const itemsTotal = form.items.reduce((a, b) => a + b.qty * b.price, 0)
+  const effectiveNilai = form.items.length ? itemsTotal : Number(form.nilai) || 0
+  const addItem = () => setForm((f) => ({ ...f, items: [...f.items, { desc: '', qty: 1, price: 0 }] }))
+  const updItem = (i: number, patch: Partial<InvoiceItem>) => setForm((f) => ({ ...f, items: f.items.map((it, j) => (j === i ? { ...it, ...patch } : it)) }))
+  const delItem = (i: number) => setForm((f) => ({ ...f, items: f.items.filter((_, j) => j !== i) }))
 
   const invoices = rows<InvoiceRow>('invoices')
 
@@ -53,20 +59,22 @@ export default function Invoices() {
   }, [invoices, state.company, query])
 
   const submit = () => {
-    if (!form.proj.trim() || !form.nilai) {
-      toast('Proyek & nilai wajib diisi')
+    if (!form.proj.trim() || effectiveNilai <= 0) {
+      toast('Proyek & nilai (atau item) wajib diisi')
       return
     }
+    const short = co(form.co).short
     addRow('invoices', {
-      no: form.no.trim() || `INV-2026/${co(form.co).short}/${Math.floor(100 + Math.random() * 900)}`,
+      no: form.no.trim() || makeNo(invoices.map((x) => x.no), short, (seq) => `INV-2026/${short}/${seq}`),
       proj: form.proj.trim(),
       co: form.co,
-      nilai: Number(form.nilai) || 0,
+      nilai: effectiveNilai,
       tgl: form.tgl.trim() || new Date().toLocaleDateString('id-ID', { dateStyle: 'medium' }),
       due: form.due.trim() || '—',
       status: form.status,
+      items: form.items.length ? form.items : undefined,
     })
-    setForm(emptyForm)
+    setForm(freshForm())
     setFormOpen(false)
     toast('Invoice baru diterbitkan')
   }
@@ -85,7 +93,13 @@ export default function Invoices() {
         { label: 'Nilai Tagihan', value: fmt(i.nilai) },
       ],
       tableTitle: 'Rincian Tagihan',
-      tableRows: [{ label: `Penagihan proyek: ${i.proj}`, value: fmt(i.nilai) }],
+      tableRows:
+        i.items && i.items.length
+          ? [
+              ...i.items.map((it) => ({ label: `${it.desc} (${it.qty} × ${fmt(it.price)})`, value: fmt(it.qty * it.price) })),
+              { label: 'TOTAL', value: fmt(i.nilai) },
+            ]
+          : [{ label: `Penagihan proyek: ${i.proj}`, value: fmt(i.nilai) }],
       footnote: 'Invoice ini diterbitkan melalui HoldingOS. Mohon lakukan pembayaran sebelum tanggal jatuh tempo.',
     })
     if (!ok) toast('Popup diblokir browser — izinkan popup untuk ekspor PDF')
@@ -189,13 +203,38 @@ export default function Invoices() {
             <CompanySelect value={form.co} onChange={(v) => setForm({ ...form, co: v })} />
           </FieldRow>
           <FieldRow>
-            <NumberField label="Nilai (Rp)" value={form.nilai} onChange={(v) => setForm({ ...form, nilai: v })} placeholder="0" />
+            {form.items.length === 0 ? (
+              <NumberField label="Nilai (Rp)" value={form.nilai} onChange={(v) => setForm({ ...form, nilai: v })} placeholder="0" />
+            ) : (
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6 }}>Total (dari item)</label>
+                <div style={{ padding: '10px 12px', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 14, fontWeight: 800, color: '#1E3A8A', background: '#F8FAFC' }}>{fmt(itemsTotal)}</div>
+              </div>
+            )}
             <SelectField label="Status" value={form.status} onChange={(v) => setForm({ ...form, status: v })} options={INVOICE_STATUSES.map((s) => ({ value: s, label: s }))} />
           </FieldRow>
           <FieldRow>
             <Field label="Tanggal Terbit" value={form.tgl} onChange={(v) => setForm({ ...form, tgl: v })} placeholder="mis. 03 Jul 2026" />
             <Field label="Jatuh Tempo" value={form.due} onChange={(v) => setForm({ ...form, due: v })} placeholder="mis. 02 Agu 2026" />
           </FieldRow>
+
+          <div style={{ marginTop: 6, borderTop: '1px solid #F1F5F9', paddingTop: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 800 }}>Item Tagihan (opsional)</span>
+              <button onClick={addItem} style={{ fontSize: 12, fontWeight: 700, color: '#1E3A8A', background: '#EEF2FF', border: '1px solid #C7D2FE', borderRadius: 8, padding: '6px 12px' }}>+ Item</button>
+            </div>
+            {form.items.length === 0 && <div style={{ fontSize: 12, color: '#94A3B8' }}>Tambahkan item untuk menghitung nilai otomatis, atau isi Nilai manual di atas.</div>}
+            {form.items.map((it, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 64px 110px 30px', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                <input value={it.desc} onChange={(e) => updItem(i, { desc: e.target.value })} placeholder="Deskripsi" className="hv-border-navy" style={{ border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none' }} />
+                <input value={it.qty || ''} onChange={(e) => updItem(i, { qty: Number(e.target.value.replace(/[^0-9]/g, '')) || 0 })} placeholder="Qty" className="hv-border-navy" style={{ border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', textAlign: 'center' }} />
+                <input value={it.price || ''} onChange={(e) => updItem(i, { price: Number(e.target.value.replace(/[^0-9]/g, '')) || 0 })} placeholder="Harga" className="hv-border-navy" style={{ border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', textAlign: 'right' }} />
+                <button onClick={() => delItem(i)} title="Hapus item" style={{ color: '#DC2626', display: 'flex', justifyContent: 'center' }}>
+                  <Icon d={['M3 6h18', 'M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2', 'M6 6l1 14a2 2 0 002 2h6a2 2 0 002-2l1-14']} size={15} width={1.9} />
+                </button>
+              </div>
+            ))}
+          </div>
         </Modal>
       )}
 

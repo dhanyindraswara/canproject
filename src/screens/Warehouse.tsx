@@ -4,7 +4,7 @@
 
 import { useState } from 'react'
 import { useApp } from '../store'
-import { curCoName } from '../theme'
+import { curCoName, fmtC } from '../theme'
 import { useData, type AsetRow, type StokRow } from '../dataStore'
 import { CompanyBadge, Tabs } from '../components/ui'
 import {
@@ -37,7 +37,7 @@ function kondisiStyle(k: string) {
 }
 
 const emptyStok = { kode: '', nama: '', gudang: '', co: 'kps', qty: '', min: '', sat: 'unit' }
-const emptyAset = { kode: '', nama: '', jenis: 'Peralatan', co: 'kps', kondisi: 'Baik', pic: '' }
+const emptyAset = { kode: '', nama: '', jenis: 'Peralatan', co: 'kps', kondisi: 'Baik', pic: '', nilai: '' }
 
 export default function Warehouse() {
   const { state, set, toast } = useApp()
@@ -85,6 +85,7 @@ export default function Warehouse() {
       co: asetForm.co,
       kondisi: asetForm.kondisi,
       pic: asetForm.pic.trim() || '—',
+      nilai: Number(asetForm.nilai) || 0,
     })
     setAsetForm(emptyAset)
     setAsetOpen(false)
@@ -192,6 +193,7 @@ export default function Warehouse() {
                   <th style={th}>Nama Aset</th>
                   <th style={th}>Jenis</th>
                   <th style={th}>PT Pemilik</th>
+                  <th style={{ ...th, textAlign: 'right' }}>Nilai Aset</th>
                   <th style={th}>Kondisi</th>
                   <th style={th}>Penanggung Jawab</th>
                   <th style={{ ...th, textAlign: 'center' }}>Aksi</th>
@@ -208,6 +210,7 @@ export default function Warehouse() {
                       <td style={{ padding: '13px 8px' }}>
                         <CompanyBadge companyId={x.co} />
                       </td>
+                      <td style={{ padding: '13px 8px', textAlign: 'right', fontWeight: 800, color: '#0F172A' }}>{x.nilai ? fmtC(x.nilai) : '—'}</td>
                       <td style={{ padding: '13px 8px' }}>
                         <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: k.bg, color: k.c }}>{x.kondisi}</span>
                       </td>
@@ -220,7 +223,7 @@ export default function Warehouse() {
                 })}
                 {asetRows.length === 0 && (
                   <tr style={{ borderTop: '1px solid #F1F5F9' }}>
-                    <td colSpan={7} style={{ padding: '30px', textAlign: 'center', color: '#94A3B8', fontWeight: 600 }}>Belum ada aset. Klik “Tambah Aset”.</td>
+                    <td colSpan={8} style={{ padding: '30px', textAlign: 'center', color: '#94A3B8', fontWeight: 600 }}>Belum ada aset. Klik “Tambah Aset”.</td>
                   </tr>
                 )}
               </tbody>
@@ -281,6 +284,7 @@ export default function Warehouse() {
             <SelectField label="Kondisi" value={asetForm.kondisi} onChange={(v) => setAsetForm({ ...asetForm, kondisi: v })} options={KONDISI.map((k) => ({ value: k, label: k }))} />
             <Field label="Penanggung Jawab" value={asetForm.pic} onChange={(v) => setAsetForm({ ...asetForm, pic: v })} placeholder="mis. Rudi Hartono" />
           </FieldRow>
+          <NumberField label="Nilai Aset (Rp)" value={asetForm.nilai} onChange={(v) => setAsetForm({ ...asetForm, nilai: v })} placeholder="0" />
         </Modal>
       )}
 

@@ -3,7 +3,7 @@
 // read-only holding mode.
 
 import { useApp } from '../store'
-import { ALL_COMPANY, CO, ROLES, co } from '../theme'
+import { ALL_COMPANY, ROLES, allCompanies, co } from '../theme'
 
 interface Notif {
   title: string
@@ -35,7 +35,7 @@ export default function Header() {
       color: ALL_COMPANY.color,
       bg: ALL_COMPANY.bg,
     },
-    ...Object.values(CO).map((c) => ({
+    ...allCompanies().map((c) => ({
       id: c.id,
       name: c.name,
       sub: c.bidang,

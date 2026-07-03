@@ -3,8 +3,8 @@
 
 import { useMemo, useState } from 'react'
 import { useApp } from '../store'
-import { curCoName, fmtC, stt } from '../theme'
-import { useData, type ProyekRow } from '../dataStore'
+import { co, curCoName, fmtC, stt } from '../theme'
+import { makeNo, useData, type ProyekRow } from '../dataStore'
 import { CompanyBadge, Icon, StatusBadge } from '../components/ui'
 import { AddButton, CompanySelect, Field, FieldRow, GhostButton, Modal, NumberField, PrimaryButton, SelectField } from '../components/Modal'
 
@@ -56,7 +56,7 @@ export default function ProyekList() {
       return
     }
     addRow('projects', {
-      no: form.no.trim() || `PO-2026/${form.co.toUpperCase()}/${Math.floor(100 + Math.random() * 900)}`,
+      no: form.no.trim() || makeNo(projects.map((p) => p.no), co(form.co).short, (seq) => `PO-2026/${co(form.co).short}/${seq}`),
       name: form.name.trim(),
       client: form.client.trim(),
       co: form.co,

@@ -11,11 +11,41 @@ export interface Company {
   bg: string
 }
 
+// Initial seed companies. At runtime the list is mutable (create/edit/delete
+// from Master Data) via a registry that `co()` reads — see below.
 export const CO: Record<string, Company> = {
   kps: { id: 'kps', short: 'KPS', name: 'PT Karya Prima Sejahtera', bidang: 'General Supplier', color: '#2563EB', bg: '#EFF4FF' },
   msn: { id: 'msn', short: 'MSN', name: 'PT Mandiri Supply Nusantara', bidang: 'Pengadaan Barang/Jasa', color: '#0891B2', bg: '#ECFEFF' },
   bck: { id: 'bck', short: 'BCK', name: 'PT Bangun Cipta Konstruksi', bidang: 'Konstruksi', color: '#7C3AED', bg: '#F3F0FF' },
 }
+
+// Mutable runtime registry — seeded from CO, kept in sync with the data store's
+// `companies` collection so newly created companies get colors everywhere.
+let REGISTRY: Record<string, Company> = { ...CO }
+
+export function syncCompanies(list: Company[]): void {
+  const next: Record<string, Company> = {}
+  list.forEach((c) => {
+    next[c.id] = c
+  })
+  REGISTRY = next
+}
+
+export function allCompanies(): Company[] {
+  return Object.values(REGISTRY)
+}
+
+// Preset brand color pairs offered when creating a new company.
+export const COMPANY_COLORS: { color: string; bg: string }[] = [
+  { color: '#2563EB', bg: '#EFF4FF' },
+  { color: '#0891B2', bg: '#ECFEFF' },
+  { color: '#7C3AED', bg: '#F3F0FF' },
+  { color: '#059669', bg: '#ECFDF5' },
+  { color: '#D97706', bg: '#FFFBEB' },
+  { color: '#DC2626', bg: '#FEF2F2' },
+  { color: '#DB2777', bg: '#FDF2F8' },
+  { color: '#475569', bg: '#F1F5F9' },
+]
 
 export type RoleKey = 'ceo' | 'superadmin' | 'adminproyek' | 'finance' | 'warehouse'
 export type MenuKey =
@@ -71,8 +101,17 @@ export function stt(s: string): StatusStyle {
   return ST[s] || DEFAULT_STATUS
 }
 
+const FALLBACK_CO: Company = { id: '?', short: '?', name: 'Perusahaan', bidang: '', color: '#475569', bg: '#F1F5F9' }
+
 export function co(id: string): Company {
-  return CO[id]
+  return (
+    REGISTRY[id] || {
+      ...FALLBACK_CO,
+      id,
+      short: (id || '?').slice(0, 3).toUpperCase(),
+      name: id || 'Perusahaan',
+    }
+  )
 }
 
 // "Semua Perusahaan" pseudo-company used by the header switcher.
