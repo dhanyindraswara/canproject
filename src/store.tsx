@@ -40,6 +40,7 @@ export interface AppState {
   cashCompany: string
 
   userEmail: string // signed-in user's email (Firebase mode)
+  currentRoleName: string // resolved role name (access-matrix key); '' = unknown
 
   toast: string
 }
@@ -61,6 +62,7 @@ const initialState: AppState = {
   masterTab: 'perusahaan',
   cashCompany: 'all',
   userEmail: '',
+  currentRoleName: '',
   toast: '',
 }
 

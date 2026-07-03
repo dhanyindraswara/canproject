@@ -3,6 +3,8 @@
 
 import { useApp } from '../store'
 import type { MenuKey } from '../theme'
+import { useData, type AccessRowT } from '../dataStore'
+import { KEY_TO_ROLE, menuAllowed } from '../roles'
 import { Icon } from './ui'
 
 interface NavItem {
@@ -53,7 +55,14 @@ function NavButton({ item }: { item: NavItem }) {
 
 export default function Sidebar() {
   const { state, set } = useApp()
+  const { rows } = useData()
   const labelShow = !state.collapsed
+
+  // Effective role name drives which menus are visible (via the access matrix).
+  const roleName = state.currentRoleName || KEY_TO_ROLE[state.role] || ''
+  const matrix = rows<AccessRowT>('accessMatrix')
+  const mainMenus = MENUS.filter((m) => menuAllowed(matrix, roleName, m.key))
+  const financeMenus = FINANCE_MENUS.filter((m) => menuAllowed(matrix, roleName, m.key))
   return (
     <aside
       style={{
@@ -110,11 +119,11 @@ export default function Sidebar() {
           overflowY: 'auto',
         }}
       >
-        {MENUS.map((m) => (
+        {mainMenus.map((m) => (
           <NavButton key={m.key} item={m} />
         ))}
-        <div style={{ height: 1, background: '#1E293B', margin: '12px 4px' }} />
-        {labelShow && (
+        {financeMenus.length > 0 && <div style={{ height: 1, background: '#1E293B', margin: '12px 4px' }} />}
+        {labelShow && financeMenus.length > 0 && (
           <div
             style={{
               fontSize: 11,
@@ -128,7 +137,7 @@ export default function Sidebar() {
             Finance · Lintas Proyek
           </div>
         )}
-        {FINANCE_MENUS.map((m) => (
+        {financeMenus.map((m) => (
           <NavButton key={m.key} item={m} />
         ))}
       </nav>

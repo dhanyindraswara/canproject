@@ -2,11 +2,15 @@
 // routed content) and the toast layer. Routing mirrors the screen flags from
 // the original prototype.
 
+import { useEffect, useRef } from 'react'
+import { signOut } from 'firebase/auth'
 import Header from './components/Header'
 import Sidebar from './components/Sidebar'
 import Toast from './components/Toast'
 import { AppProvider, useApp } from './store'
-import { DataProvider } from './dataStore'
+import { DataProvider, useData, type UserRowT } from './dataStore'
+import { auth, firebaseReady } from './firebase'
+import { landingFor, roleNameToKey } from './roles'
 import Login from './screens/Login'
 import Dashboard from './screens/Dashboard'
 import Tender from './screens/Tender'
@@ -52,7 +56,29 @@ function Content() {
 }
 
 function Shell() {
-  const { state } = useApp()
+  const { state, set } = useApp()
+  const { data } = useData()
+  const appliedRef = useRef('')
+
+  // Firebase mode: once signed in, resolve the user's role from the user
+  // directory → set landing + role; block deactivated accounts.
+  useEffect(() => {
+    if (!firebaseReady) return
+    if (state.screen !== 'app' || !state.userEmail) {
+      appliedRef.current = ''
+      return
+    }
+    if (appliedRef.current === state.userEmail) return
+    const u = (data.users as UserRowT[]).find((x) => x.email.toLowerCase() === state.userEmail.toLowerCase())
+    if (!u) return // directory not loaded yet (or no record) — retry when it changes
+    appliedRef.current = state.userEmail
+    if (u.aktif === false) {
+      if (auth) signOut(auth).catch(() => {})
+      alert('Akun Anda dinonaktifkan. Hubungi administrator.')
+      return
+    }
+    set({ role: roleNameToKey(u.role), currentRoleName: u.role, menu: landingFor(u.role) })
+  }, [state.screen, state.userEmail, data.users, set])
 
   if (state.screen === 'login') return <Login />
 

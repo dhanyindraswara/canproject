@@ -7,9 +7,11 @@ import { useApp } from '../store'
 import { allCompanies, co } from '../theme'
 import { accessMatrixSeed } from '../data'
 import { useData, type AccessRowT, type UserRowT } from '../dataStore'
+import { createAuthUser } from '../firebase'
 import { AddButton, Field, FieldRow, GhostButton, Modal, PrimaryButton, RowAction, SelectField } from '../components/Modal'
 
-const ROLES = ['CEO', 'Super Admin', 'Admin Proyek', 'Finance', 'Warehouse', 'Viewer']
+// Role options mirror the access-matrix rows so a user's role maps cleanly.
+const ROLES = ['Super Admin', 'CEO / Owner', 'Admin Proyek', 'Finance', 'Warehouse', 'Viewer']
 
 // Modules shown as columns of the access matrix (key must match AccessRow).
 const MODULES = [
@@ -42,15 +44,16 @@ const ROLE_COLOR: Record<string, string> = {
 const th = { fontWeight: 700, padding: '12px 8px' } as const
 const matrixTh = { fontWeight: 700, padding: '12px 8px' } as const
 
-const emptyUser = { nama: '', email: '', role: 'Admin Proyek', scope: [] as string[], aktif: true }
+const emptyUser = { nama: '', email: '', role: 'Admin Proyek', scope: [] as string[], aktif: true, password: '' }
 
 export default function Users() {
   const { toast } = useApp()
-  const { rows, addRow, updateRow, removeRow, setRows } = useData()
+  const { rows, addRow, updateRow, removeRow, setRows, cloudMode } = useData()
   const users = rows<UserRowT>('users')
   const matrix = rows<AccessRowT>('accessMatrix')
 
-  const [edit, setEdit] = useState<{ id: string | null; nama: string; email: string; role: string; scope: string[]; aktif: boolean } | null>(null)
+  const [edit, setEdit] = useState<{ id: string | null; nama: string; email: string; role: string; scope: string[]; aktif: boolean; password: string } | null>(null)
+  const [saving, setSaving] = useState(false)
   const [roleName, setRoleName] = useState('')
   const [roleOpen, setRoleOpen] = useState(false)
 
@@ -78,7 +81,7 @@ export default function Users() {
   }
 
   const openForm = (u?: UserRowT) => {
-    setEdit(u ? { id: u.id, nama: u.nama, email: u.email, role: u.role, scope: [...u.scope], aktif: u.aktif } : { id: null, ...emptyUser })
+    setEdit(u ? { id: u.id, nama: u.nama, email: u.email, role: u.role, scope: [...u.scope], aktif: u.aktif, password: '' } : { id: null, ...emptyUser })
   }
 
   const toggleScope = (id: string) => {
@@ -86,7 +89,7 @@ export default function Users() {
     setEdit({ ...edit, scope: edit.scope.includes(id) ? edit.scope.filter((x) => x !== id) : [...edit.scope, id] })
   }
 
-  const save = () => {
+  const save = async () => {
     if (!edit) return
     if (!edit.nama.trim() || !edit.email.trim()) {
       toast('Nama & email wajib diisi')
@@ -96,10 +99,28 @@ export default function Users() {
     if (edit.id) {
       updateRow('users', edit.id, payload)
       toast('User diperbarui')
-    } else {
-      addRow('users', payload)
-      toast('User ditambahkan')
+      setEdit(null)
+      return
     }
+    // Adding: in Firebase mode also create the real login account.
+    if (cloudMode) {
+      if (edit.password.length < 6) {
+        toast('Password minimal 6 karakter')
+        return
+      }
+      setSaving(true)
+      try {
+        await createAuthUser(edit.email.trim(), edit.password)
+      } catch (e) {
+        setSaving(false)
+        const code = (e as { code?: string }).code || ''
+        toast(code.includes('email-already') ? 'Email sudah terdaftar di Firebase' : code.includes('invalid-email') ? 'Format email tidak valid' : 'Gagal membuat akun login')
+        return
+      }
+      setSaving(false)
+    }
+    addRow('users', payload)
+    toast(cloudMode ? 'User + akun login dibuat' : 'User ditambahkan')
     setEdit(null)
   }
 
@@ -166,7 +187,7 @@ export default function Users() {
                 <td style={{ padding: '13px 8px' }}>
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                     <RowAction kind="edit" title="Edit user" onClick={() => openForm(u)} />
-                    <RowAction kind="delete" title="Hapus user" onClick={() => { removeRow('users', u.id); toast('User dihapus') }} />
+                    <RowAction kind="delete" title="Hapus user" onClick={() => { removeRow('users', u.id); toast(cloudMode ? 'User dihapus (hapus juga akunnya di Firebase Console → Auth)' : 'User dihapus') }} />
                   </div>
                 </td>
               </tr>
@@ -260,7 +281,7 @@ export default function Users() {
           footer={
             <>
               <GhostButton onClick={() => setEdit(null)}>Batal</GhostButton>
-              <PrimaryButton onClick={save}>Simpan</PrimaryButton>
+              <PrimaryButton onClick={save}>{saving ? 'Membuat akun…' : 'Simpan'}</PrimaryButton>
             </>
           }
         >
@@ -268,6 +289,12 @@ export default function Users() {
             <Field label="Nama" value={edit.nama} onChange={(v) => setEdit({ ...edit, nama: v })} placeholder="Nama lengkap" />
             <Field label="Email" value={edit.email} onChange={(v) => setEdit({ ...edit, email: v })} placeholder="nama@holding.co.id" />
           </FieldRow>
+          {cloudMode && !edit.id && (
+            <div style={{ marginBottom: 14 }}>
+              <Field label="Password akun login" type="password" value={edit.password} onChange={(v) => setEdit({ ...edit, password: v })} placeholder="min. 6 karakter" />
+              <div style={{ fontSize: 11.5, color: '#94A3B8', marginTop: 4 }}>Akun login Firebase dibuat otomatis dengan email &amp; password ini.</div>
+            </div>
+          )}
           <div style={{ marginBottom: 14 }}>
             <SelectField label="Role" value={edit.role} onChange={(v) => setEdit({ ...edit, role: v })} options={ROLES.map((r) => ({ value: r, label: r }))} />
           </div>
