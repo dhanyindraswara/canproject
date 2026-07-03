@@ -5,10 +5,30 @@
 import { useState } from 'react'
 import { useApp } from '../store'
 import { allCompanies, co } from '../theme'
-import { useData, type UserRowT } from '../dataStore'
+import { accessMatrixSeed } from '../data'
+import { useData, type AccessRowT, type UserRowT } from '../dataStore'
 import { AddButton, Field, FieldRow, GhostButton, Modal, PrimaryButton, RowAction, SelectField } from '../components/Modal'
 
 const ROLES = ['CEO', 'Super Admin', 'Admin Proyek', 'Finance', 'Warehouse', 'Viewer']
+
+// Modules shown as columns of the access matrix (key must match AccessRow).
+const MODULES = [
+  { key: 'dash', label: 'Dashboard' },
+  { key: 'tender', label: 'Tender' },
+  { key: 'proyek', label: 'Proyek' },
+  { key: 'keuangan', label: 'Keuangan' },
+  { key: 'wh', label: 'Warehouse' },
+  { key: 'master', label: 'Master' },
+  { key: 'users', label: 'User' },
+] as const
+
+// The three access levels a cell cycles through.
+const LEVELS = ['✓', 'R', '–']
+const LEVEL_STYLE: Record<string, { c: string; bg: string }> = {
+  '✓': { c: '#059669', bg: '#ECFDF5' },
+  R: { c: '#D97706', bg: '#FFFBEB' },
+  '–': { c: '#94A3B8', bg: '#F1F5F9' },
+}
 
 const ROLE_COLOR: Record<string, string> = {
   CEO: '#7C3AED',
@@ -19,27 +39,43 @@ const ROLE_COLOR: Record<string, string> = {
   Viewer: '#64748B',
 }
 
-const ACCESS_MATRIX = [
-  { role: 'Super Admin', dash: '✓', tender: '✓', proyek: '✓', keuangan: '✓', wh: '✓', master: '✓', users: '✓' },
-  { role: 'CEO / Owner', dash: '✓', tender: 'R', proyek: 'R', keuangan: 'R', wh: 'R', master: '–', users: '–' },
-  { role: 'Admin Proyek', dash: '–', tender: '✓', proyek: '✓', keuangan: 'R', wh: 'R', master: '–', users: '–' },
-  { role: 'Finance', dash: 'R', tender: '–', proyek: 'R', keuangan: '✓', wh: '–', master: 'R', users: '–' },
-  { role: 'Warehouse', dash: '–', tender: '–', proyek: 'R', keuangan: '–', wh: '✓', master: 'R', users: '–' },
-  { role: 'Viewer', dash: 'R', tender: 'R', proyek: 'R', keuangan: '–', wh: 'R', master: '–', users: '–' },
-]
-
 const th = { fontWeight: 700, padding: '12px 8px' } as const
 const matrixTh = { fontWeight: 700, padding: '12px 8px' } as const
-const matrixTd = { padding: '12px 8px', fontWeight: 800, color: '#334155' } as const
 
 const emptyUser = { nama: '', email: '', role: 'Admin Proyek', scope: [] as string[], aktif: true }
 
 export default function Users() {
   const { toast } = useApp()
-  const { rows, addRow, updateRow, removeRow } = useData()
+  const { rows, addRow, updateRow, removeRow, setRows } = useData()
   const users = rows<UserRowT>('users')
+  const matrix = rows<AccessRowT>('accessMatrix')
 
   const [edit, setEdit] = useState<{ id: string | null; nama: string; email: string; role: string; scope: string[]; aktif: boolean } | null>(null)
+  const [roleName, setRoleName] = useState('')
+  const [roleOpen, setRoleOpen] = useState(false)
+
+  // Cycle a matrix cell: ✓ → R → – → ✓
+  const cycleCell = (row: AccessRowT, key: string) => {
+    const cur = (row as unknown as Record<string, string>)[key] ?? '–'
+    const next = LEVELS[(LEVELS.indexOf(cur) + 1) % LEVELS.length]
+    updateRow('accessMatrix', row.id, { [key]: next })
+  }
+
+  const addRole = () => {
+    if (!roleName.trim()) {
+      toast('Nama role wajib diisi')
+      return
+    }
+    addRow('accessMatrix', { role: roleName.trim(), dash: '–', tender: '–', proyek: '–', keuangan: '–', wh: '–', master: '–', users: '–' })
+    setRoleName('')
+    setRoleOpen(false)
+    toast('Role ditambahkan — atur aksesnya di matriks')
+  }
+
+  const resetMatrix = () => {
+    setRows('accessMatrix', accessMatrixSeed.map((r, i) => ({ ...r, id: `acc-seed-${i}` })))
+    toast('Matriks direset ke default')
+  }
 
   const openForm = (u?: UserRowT) => {
     setEdit(u ? { id: u.id, nama: u.nama, email: u.email, role: u.role, scope: [...u.scope], aktif: u.aktif } : { id: null, ...emptyUser })
@@ -144,42 +180,78 @@ export default function Users() {
         </table>
       </div>
 
-      <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Matriks Hak Akses (ringkas)</div>
-      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 15, fontWeight: 800 }}>Matriks Hak Akses — klik sel untuk mengubah</div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={resetMatrix} className="hv-menu-item-soft" style={{ fontSize: 12.5, fontWeight: 700, color: '#475569', border: '1px solid #E2E8F0', background: '#fff', borderRadius: 9, padding: '8px 14px' }}>Reset default</button>
+          <button onClick={() => setRoleOpen(true)} style={{ fontSize: 12.5, fontWeight: 700, color: '#1E3A8A', border: '1px solid #C7D2FE', background: '#EEF2FF', borderRadius: 9, padding: '8px 14px' }}>+ Role</button>
+        </div>
+      </div>
+      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 16, overflow: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'center' }}>
           <thead>
             <tr style={{ color: '#94A3B8', background: '#FAFBFC' }}>
               <th style={{ fontWeight: 700, padding: '12px 16px', textAlign: 'left' }}>Role</th>
-              <th style={matrixTh}>Dashboard</th>
-              <th style={matrixTh}>Tender</th>
-              <th style={matrixTh}>Proyek</th>
-              <th style={matrixTh}>Keuangan</th>
-              <th style={matrixTh}>Warehouse</th>
-              <th style={matrixTh}>Master</th>
-              <th style={matrixTh}>User</th>
+              {MODULES.map((m) => (
+                <th key={m.key} style={matrixTh}>{m.label}</th>
+              ))}
+              <th style={{ ...matrixTh, textAlign: 'center' }}>Aksi</th>
             </tr>
           </thead>
           <tbody>
-            {ACCESS_MATRIX.map((m, i) => (
-              <tr key={i} style={{ borderTop: '1px solid #F1F5F9' }}>
-                <td style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700 }}>{m.role}</td>
-                <td style={matrixTd}>{m.dash}</td>
-                <td style={matrixTd}>{m.tender}</td>
-                <td style={matrixTd}>{m.proyek}</td>
-                <td style={matrixTd}>{m.keuangan}</td>
-                <td style={matrixTd}>{m.wh}</td>
-                <td style={matrixTd}>{m.master}</td>
-                <td style={matrixTd}>{m.users}</td>
+            {matrix.map((row) => (
+              <tr key={row.id} style={{ borderTop: '1px solid #F1F5F9' }}>
+                <td style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700 }}>{row.role}</td>
+                {MODULES.map((m) => {
+                  const val = (row as unknown as Record<string, string>)[m.key] ?? '–'
+                  const s = LEVEL_STYLE[val] || LEVEL_STYLE['–']
+                  return (
+                    <td key={m.key} style={{ padding: '8px' }}>
+                      <button
+                        onClick={() => cycleCell(row, m.key)}
+                        title="Klik untuk ubah akses"
+                        style={{ width: 34, height: 30, borderRadius: 8, fontWeight: 800, fontSize: 14, color: s.c, background: s.bg, border: '1px solid transparent' }}
+                      >
+                        {val}
+                      </button>
+                    </td>
+                  )
+                })}
+                <td style={{ padding: '8px' }}>
+                  <RowAction kind="delete" title="Hapus role" onClick={() => { removeRow('accessMatrix', row.id); toast('Role dihapus') }} />
+                </td>
               </tr>
             ))}
+            {matrix.length === 0 && (
+              <tr style={{ borderTop: '1px solid #F1F5F9' }}>
+                <td colSpan={MODULES.length + 2} style={{ padding: '28px', color: '#94A3B8', fontWeight: 600 }}>Belum ada role. Klik “+ Role”, atau “Reset default”.</td>
+              </tr>
+            )}
           </tbody>
         </table>
         <div style={{ display: 'flex', gap: 18, padding: '12px 16px', borderTop: '1px solid #F1F5F9', fontSize: 12, color: '#64748B' }}>
-          <span><b style={{ color: '#334155' }}>✓</b> Akses penuh</span>
-          <span><b style={{ color: '#334155' }}>R</b> Read-only</span>
-          <span><b style={{ color: '#334155' }}>–</b> Tidak ada akses</span>
+          <span><b style={{ color: '#059669' }}>✓</b> Akses penuh</span>
+          <span><b style={{ color: '#D97706' }}>R</b> Read-only</span>
+          <span><b style={{ color: '#94A3B8' }}>–</b> Tidak ada akses</span>
         </div>
       </div>
+
+      {roleOpen && (
+        <Modal
+          title="Tambah Role"
+          subtitle="Buat role baru, lalu atur aksesnya di matriks"
+          onClose={() => setRoleOpen(false)}
+          width={420}
+          footer={
+            <>
+              <GhostButton onClick={() => setRoleOpen(false)}>Batal</GhostButton>
+              <PrimaryButton onClick={addRole}>Tambah</PrimaryButton>
+            </>
+          }
+        >
+          <Field label="Nama Role" value={roleName} onChange={setRoleName} placeholder="mis. Manajer Proyek" />
+        </Modal>
+      )}
 
       {edit && (
         <Modal

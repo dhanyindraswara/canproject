@@ -28,6 +28,7 @@ import {
   clients as seedClients,
   suppliers as seedSuppliers,
   banks as seedBanks,
+  accessMatrixSeed,
   defaultMilestones,
   soForProject,
   type Proyek,
@@ -42,6 +43,7 @@ import {
   type Supplier,
   type Bank,
   type Milestone,
+  type AccessRow,
 } from './data'
 import { CO, syncCompanies, type Company } from './theme'
 
@@ -67,6 +69,7 @@ export type UserRowT = UserRow & WithId
 export type ClientRow = Client & WithId
 export type SupplierRow = Supplier & WithId
 export type BankRow = Bank & WithId
+export type AccessRowT = AccessRow & WithId
 export type CompanyRow = Company // Company already carries an `id`
 
 // A Sales Order is now a first-class stored entity (with editable milestones
@@ -122,6 +125,7 @@ export interface DataState {
   suppliers: SupplierRow[]
   banks: BankRow[]
   companies: CompanyRow[]
+  accessMatrix: AccessRowT[]
   docs: DocItem[]
   notes: NoteItem[]
 }
@@ -140,6 +144,7 @@ export type CollKey =
   | 'suppliers'
   | 'banks'
   | 'companies'
+  | 'accessMatrix'
 
 const STORAGE_KEY = 'holdingos.data.v1'
 const CURRENT_USER = 'Siti Nurhaliza'
@@ -195,6 +200,7 @@ function seed(): DataState {
     suppliers: withIds(seedSuppliers, 'supplier'),
     banks: withIds(seedBanks, 'bank'),
     companies: Object.values(CO).map((c) => ({ ...c })),
+    accessMatrix: withIds(accessMatrixSeed, 'acc'),
     docs: [],
     notes: [],
   }
@@ -219,6 +225,7 @@ export interface DataStore {
   addRow: <T extends object>(key: CollKey, row: T) => string
   updateRow: (key: CollKey, id: string, patch: Record<string, unknown>) => void
   removeRow: (key: CollKey, id: string) => void
+  setRows: (key: CollKey, next: WithId[]) => void
   // documents
   docsFor: (scope: string) => DocItem[]
   addDoc: (doc: Omit<DocItem, 'id' | 'uploadedAt' | 'uploadedBy'>) => void
@@ -296,6 +303,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
     )
   }, [])
 
+  // Replace an entire collection (used e.g. to reset the access matrix).
+  const setRows = useCallback((key: CollKey, next: WithId[]) => {
+    setData((prev) => ({ ...prev, [key]: next }) as DataState)
+  }, [])
+
   const docsFor = useCallback((scope: string) => data.docs.filter((d) => d.scope === scope), [data.docs])
 
   const addDoc = useCallback((doc: Omit<DocItem, 'id' | 'uploadedAt' | 'uploadedBy'>) => {
@@ -345,6 +357,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       addRow,
       updateRow,
       removeRow,
+      setRows,
       docsFor,
       addDoc,
       removeDoc,
@@ -354,7 +367,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       resetAll,
       storageWarning,
     }),
-    [data, rows, addRow, updateRow, removeRow, docsFor, addDoc, removeDoc, notesFor, addNote, removeNote, resetAll, storageWarning],
+    [data, rows, addRow, updateRow, removeRow, setRows, docsFor, addDoc, removeDoc, notesFor, addNote, removeNote, resetAll, storageWarning],
   )
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>

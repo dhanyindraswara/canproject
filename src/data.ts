@@ -83,6 +83,27 @@ export interface Milestone {
   status: string
 }
 
+// A row of the (editable) access matrix — one per role, one cell per module.
+export interface AccessRow {
+  role: string
+  dash: string
+  tender: string
+  proyek: string
+  keuangan: string
+  wh: string
+  master: string
+  users: string
+}
+
+export const accessMatrixSeed: AccessRow[] = [
+  { role: 'Super Admin', dash: '✓', tender: '✓', proyek: '✓', keuangan: '✓', wh: '✓', master: '✓', users: '✓' },
+  { role: 'CEO / Owner', dash: '✓', tender: 'R', proyek: 'R', keuangan: 'R', wh: 'R', master: '–', users: '–' },
+  { role: 'Admin Proyek', dash: '–', tender: '✓', proyek: '✓', keuangan: 'R', wh: 'R', master: '–', users: '–' },
+  { role: 'Finance', dash: 'R', tender: '–', proyek: 'R', keuangan: '✓', wh: '–', master: 'R', users: '–' },
+  { role: 'Warehouse', dash: '–', tender: '–', proyek: 'R', keuangan: '–', wh: '✓', master: 'R', users: '–' },
+  { role: 'Viewer', dash: 'R', tender: 'R', proyek: 'R', keuangan: '–', wh: 'R', master: '–', users: '–' },
+]
+
 export interface UserRow {
   nama: string
   email: string
