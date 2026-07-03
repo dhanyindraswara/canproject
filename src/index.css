@@ -1,0 +1,138 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  background: #f1f5f9;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+input {
+  font-family: inherit;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---- Hover helpers (ported from the prototype's style-hover) ---- */
+.hv-border-navy {
+  transition: all 0.16s;
+}
+.hv-border-navy:hover {
+  border-color: #1e3a8a !important;
+}
+
+.hv-login-role {
+  transition: all 0.16s;
+}
+.hv-login-role:hover {
+  border-color: #1e3a8a !important;
+  background: #f8fafc !important;
+}
+
+.hv-nav {
+  transition: all 0.14s;
+}
+.hv-nav:hover {
+  color: #fff !important;
+}
+
+.hv-collapse:hover {
+  color: #fff !important;
+  background: #1e293b !important;
+}
+
+.hv-icon-btn:hover {
+  background: #e2e8f0 !important;
+}
+
+.hv-menu-item:hover {
+  background: #f1f5f9 !important;
+}
+
+.hv-menu-item-soft:hover {
+  background: #f8fafc !important;
+}
+
+.hv-logout:hover {
+  background: #fef2f2 !important;
+}
+
+.hv-card:hover {
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 6px 16px -8px rgba(2, 6, 23, 0.18) !important;
+}
+
+.hv-row:hover {
+  background: #f8fafc !important;
+}
+
+.hv-btn-primary:hover {
+  background: #172554 !important;
+}
+
+.hv-convert:hover {
+  background: #059669 !important;
+  color: #fff !important;
+}
+
+.hv-revbar:hover {
+  filter: brightness(1.12);
+}
+
+.hv-brighten:hover {
+  filter: brightness(1.08);
+}
+
+.hv-upload:hover {
+  border-color: #1e3a8a !important;
+  color: #1e3a8a !important;
+}
+
+.hv-link-navy:hover {
+  color: #1e3a8a !important;
+}
