@@ -46,6 +46,10 @@ import {
   type AccessRow,
 } from './data'
 import { CO, syncCompanies, type Company } from './theme'
+import { collection, doc, getDocs, setDoc } from 'firebase/firestore'
+import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage'
+import { onAuthStateChanged } from 'firebase/auth'
+import { auth, db, storage, firebaseReady } from './firebase'
 
 // Every stored row carries a stable string id for edit/delete.
 export interface WithId {
@@ -95,7 +99,8 @@ export interface DocItem {
   name: string
   mime: string
   size: number
-  dataUrl: string
+  dataUrl: string // data: URI (local mode) or https download URL (Firebase mode)
+  storagePath?: string // Cloud Storage path, for deletion (Firebase mode)
   category: string
   note: string
   uploadedAt: string
@@ -148,6 +153,14 @@ export type CollKey =
 
 const STORAGE_KEY = 'holdingos.data.v1'
 const CURRENT_USER = 'Siti Nurhaliza'
+
+// All persisted collection keys (Firestore docs live at workspaces/main/state/<key>).
+const ALL_KEYS: (keyof DataState)[] = [
+  'projects', 'tenders', 'salesOrders', 'invoices', 'payments', 'poKeluar',
+  'stok', 'aset', 'users', 'clients', 'suppliers', 'banks', 'companies',
+  'accessMatrix', 'docs', 'notes',
+]
+const WS = 'main' // single shared workspace for now
 
 let seq = 0
 // Unique id — Date.now/Math.random are fine here (browser runtime, not a
@@ -229,7 +242,11 @@ export interface DataStore {
   // documents
   docsFor: (scope: string) => DocItem[]
   addDoc: (doc: Omit<DocItem, 'id' | 'uploadedAt' | 'uploadedBy'>) => void
+  addDocFile: (scope: string, file: File, category: string, note: string) => Promise<void>
   removeDoc: (id: string) => void
+  // cloud sync status (Firebase mode)
+  cloudMode: boolean
+  cloudReady: boolean
   // notes / reviews
   notesFor: (scope: string) => NoteItem[]
   addNote: (scope: string, text: string) => void
@@ -242,24 +259,84 @@ export interface DataStore {
 const Ctx = createContext<DataStore | null>(null)
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<DataState>(() => load())
+  // In Firebase mode start from seed and hydrate from Firestore after auth;
+  // in local mode load straight from localStorage.
+  const [data, setData] = useState<DataState>(() => (firebaseReady ? seed() : load()))
   const [storageWarning, setStorageWarning] = useState(false)
+  const [cloudReady, setCloudReady] = useState(!firebaseReady) // local mode is "ready" immediately
   const first = useRef(true)
+  // Last values written per collection, to write only what actually changed.
+  const lastPersisted = useRef<Partial<Record<keyof DataState, unknown>>>({})
 
-  // Persist on every change. If we blow the localStorage quota (large files),
-  // keep working in-memory but flag a warning so the UI can surface it.
+  // ---- Firebase mode: hydrate from Firestore once the user is signed in ----
+  useEffect(() => {
+    if (!firebaseReady || !auth || !db) return
+    const fauth = auth
+    const fdb = db
+    const unsub = onAuthStateChanged(fauth, async (user) => {
+      if (!user) {
+        setCloudReady(false)
+        return
+      }
+      try {
+        const snap = await getDocs(collection(fdb, 'workspaces', WS, 'state'))
+        const loaded: Record<string, unknown[]> = {}
+        snap.forEach((d) => {
+          loaded[d.id] = (d.data().items as unknown[]) || []
+        })
+        const base = seed() as unknown as Record<string, unknown>
+        const next = { ...base }
+        let hadAny = false
+        for (const key of ALL_KEYS) {
+          if (loaded[key]) {
+            next[key] = loaded[key]
+            hadAny = true
+          }
+        }
+        // Fresh project: seed Firestore once.
+        if (!hadAny) {
+          await Promise.all(ALL_KEYS.map((k) => setDoc(doc(fdb, 'workspaces', WS, 'state', k), { items: base[k] })))
+        }
+        // Prime lastPersisted so the write-through effect doesn't echo the load.
+        for (const key of ALL_KEYS) lastPersisted.current[key] = next[key]
+        setData(next as unknown as DataState)
+        setCloudReady(true)
+      } catch (e) {
+        console.error('Firestore load failed — using local data', e)
+        setData(load())
+        setCloudReady(true)
+      }
+    })
+    return unsub
+  }, [])
+
+  // ---- Persist on change ----
   useEffect(() => {
     if (first.current) {
       first.current = false
       return
     }
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-      setStorageWarning(false)
-    } catch {
-      setStorageWarning(true)
+    if (!cloudReady) return
+    if (firebaseReady && db) {
+      const fdb = db
+      const rec = data as unknown as Record<string, unknown>
+      // Write only the collections whose reference changed.
+      for (const key of ALL_KEYS) {
+        const cur = rec[key]
+        if (cur !== lastPersisted.current[key]) {
+          lastPersisted.current[key] = cur
+          setDoc(doc(fdb, 'workspaces', WS, 'state', key), { items: cur }).catch((e) => console.error('Firestore save failed:', key, e))
+        }
+      }
+    } else {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+        setStorageWarning(false)
+      } catch {
+        setStorageWarning(true)
+      }
     }
-  }, [data])
+  }, [data, cloudReady])
 
   // Keep the theme company registry in sync so `co()` resolves colors for any
   // company created/edited/deleted at runtime.
@@ -320,8 +397,44 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setData((prev) => ({ ...prev, docs: [full, ...prev.docs] }))
   }, [])
 
+  // Upload a real file: to Cloud Storage in Firebase mode (store the download
+  // URL), or inline base64 in local mode. Then record the document.
+  const addDocFile = useCallback(async (scope: string, file: File, category: string, note: string) => {
+    const id = uid('doc')
+    let dataUrl: string
+    let storagePath: string | undefined
+    if (firebaseReady && storage) {
+      storagePath = `workspaces/${WS}/docs/${id}/${file.name}`
+      const r = storageRef(storage, storagePath)
+      await uploadBytes(r, file)
+      dataUrl = await getDownloadURL(r)
+    } else {
+      dataUrl = await fileToDataUrl(file)
+    }
+    const full: DocItem = {
+      id,
+      scope,
+      name: file.name,
+      mime: file.type || 'application/octet-stream',
+      size: file.size,
+      dataUrl,
+      storagePath,
+      category,
+      note,
+      uploadedAt: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
+      uploadedBy: CURRENT_USER,
+    }
+    setData((prev) => ({ ...prev, docs: [full, ...prev.docs] }))
+  }, [])
+
   const removeDoc = useCallback((id: string) => {
-    setData((prev) => ({ ...prev, docs: prev.docs.filter((d) => d.id !== id) }))
+    setData((prev) => {
+      const d = prev.docs.find((x) => x.id === id)
+      if (d?.storagePath && firebaseReady && storage) {
+        deleteObject(storageRef(storage, d.storagePath)).catch(() => {})
+      }
+      return { ...prev, docs: prev.docs.filter((x) => x.id !== id) }
+    })
   }, [])
 
   const notesFor = useCallback((scope: string) => data.notes.filter((n) => n.scope === scope), [data.notes])
@@ -342,12 +455,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const resetAll = useCallback(() => {
-    try {
-      localStorage.removeItem(STORAGE_KEY)
-    } catch {
-      /* ignore */
+    const s = seed()
+    if (firebaseReady && db) {
+      const fdb = db
+      const rec = s as unknown as Record<string, unknown>
+      for (const key of ALL_KEYS) {
+        lastPersisted.current[key] = rec[key]
+        setDoc(doc(fdb, 'workspaces', WS, 'state', key), { items: rec[key] }).catch((e) => console.error('reset save failed', key, e))
+      }
+    } else {
+      try {
+        localStorage.removeItem(STORAGE_KEY)
+      } catch {
+        /* ignore */
+      }
     }
-    setData(seed())
+    setData(s)
   }, [])
 
   const store = useMemo<DataStore>(
@@ -360,14 +483,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setRows,
       docsFor,
       addDoc,
+      addDocFile,
       removeDoc,
+      cloudMode: firebaseReady,
+      cloudReady,
       notesFor,
       addNote,
       removeNote,
       resetAll,
       storageWarning,
     }),
-    [data, rows, addRow, updateRow, removeRow, setRows, docsFor, addDoc, removeDoc, notesFor, addNote, removeNote, resetAll, storageWarning],
+    [data, rows, addRow, updateRow, removeRow, setRows, docsFor, addDoc, addDocFile, removeDoc, cloudReady, notesFor, addNote, removeNote, resetAll, storageWarning],
   )
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>

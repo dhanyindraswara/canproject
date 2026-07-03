@@ -5,7 +5,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from './ui'
 import { allCompanies, co } from '../theme'
-import { fileToDataUrl, formatBytes, useData, type DocItem } from '../dataStore'
+import { formatBytes, useData, type DocItem } from '../dataStore'
 import { useApp } from '../store'
 
 /* ------------------------------ Modal shell ------------------------------ */
@@ -296,7 +296,7 @@ function isImage(mime: string) {
 // Reusable document panel: upload many files, tag category + note, view and
 // delete. `scope` binds documents to an entity (e.g. 'proyek:p1').
 export function DocumentManager({ scope, title = 'Dokumen', accentEmpty }: { scope: string; title?: string; accentEmpty?: string }) {
-  const { docsFor, addDoc, removeDoc } = useData()
+  const { docsFor, addDocFile, removeDoc, cloudMode } = useData()
   const { toast } = useApp()
   const docs = docsFor(scope)
   const [category, setCategory] = useState(DOC_CATEGORIES[0])
@@ -309,23 +309,26 @@ export function DocumentManager({ scope, title = 'Dokumen', accentEmpty }: { sco
     setBusy(true)
     let added = 0
     let skipped = 0
+    // In local mode files are stored as base64 in localStorage (small cap); in
+    // Firebase mode they go to Cloud Storage (larger cap).
+    const cap = cloudMode ? 15 * 1024 * 1024 : MAX_FILE_BYTES
     for (const file of Array.from(files)) {
-      if (file.size > MAX_FILE_BYTES) {
+      if (file.size > cap) {
         skipped += 1
         continue
       }
       try {
-        const dataUrl = await fileToDataUrl(file)
-        addDoc({ scope, name: file.name, mime: file.type || 'application/octet-stream', size: file.size, dataUrl, category, note })
+        await addDocFile(scope, file, category, note)
         added += 1
-      } catch {
+      } catch (e) {
+        console.error('upload failed', e)
         skipped += 1
       }
     }
     setBusy(false)
     setNote('')
     if (added) toast(`${added} dokumen tersimpan${skipped ? `, ${skipped} dilewati` : ''}`)
-    else if (skipped) toast(`Gagal: file terlalu besar (maks 4 MB per file)`)
+    else if (skipped) toast(`Gagal mengunggah — file terlalu besar (maks ${cloudMode ? '15' : '4'} MB) atau ada error`)
   }
 
   return (

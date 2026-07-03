@@ -7,7 +7,7 @@ import { useApp } from '../store'
 import { co, fmt, fmtC, stt } from '../theme'
 import { defaultMilestones } from '../data'
 import { printDocument } from '../print'
-import { fileToDataUrl, makeNo, useData, type InvoiceRow, type PaymentRow, type ProyekRow, type SalesOrderRow } from '../dataStore'
+import { makeNo, useData, type InvoiceRow, type PaymentRow, type ProyekRow, type SalesOrderRow } from '../dataStore'
 import { Icon, StatusBadge, Tabs } from '../components/ui'
 import {
   AddButton,
@@ -41,7 +41,7 @@ const th = { fontWeight: 700, padding: '11px 8px' } as const
 
 export default function ProyekDetail() {
   const { state, set, openSO, toast } = useApp()
-  const { rows, addRow, updateRow, removeRow, notesFor, addNote, removeNote, addDoc } = useData()
+  const { rows, addRow, updateRow, removeRow, notesFor, addNote, removeNote, addDocFile } = useData()
 
   const projects = rows<ProyekRow>('projects')
   const P0 = projects.find((x) => x.id === state.detailProyek) || projects[0]
@@ -130,9 +130,11 @@ export default function ProyekDetail() {
       bank: payForm.bank.trim() || '—',
     })
     for (const f of payFiles) {
-      if (f.size > 4 * 1024 * 1024) continue
-      const dataUrl = await fileToDataUrl(f)
-      addDoc({ scope: `payment:${id}`, name: f.name, mime: f.type || 'application/octet-stream', size: f.size, dataUrl, category: 'Bukti Bayar', note: '' })
+      try {
+        await addDocFile(`payment:${id}`, f, 'Bukti Bayar', '')
+      } catch (e) {
+        console.error('payment doc upload failed', e)
+      }
     }
     setPayForm({ inv: '', nilai: '', tgl: '', metode: 'Transfer', bank: '' })
     setPayFiles([])

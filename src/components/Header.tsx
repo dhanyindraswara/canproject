@@ -312,7 +312,7 @@ export default function Header() {
             HW
           </span>
           <span style={{ lineHeight: 1.15, textAlign: 'left' }}>
-            <span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>Hendra Wijaya</span>
+            <span style={{ display: 'block', fontSize: 13, fontWeight: 700, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{state.userEmail || 'Hendra Wijaya'}</span>
             <span style={{ display: 'block', fontSize: 11, color: '#94A3B8' }}>{ROLES[state.role].label}</span>
           </span>
         </button>
@@ -352,11 +352,11 @@ export default function Header() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
           <span style={{ width: 56, height: 56, borderRadius: 14, background: 'linear-gradient(135deg,#1E3A8A,#2563EB)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 20 }}>HW</span>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>Hendra Wijaya</div>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>{state.userEmail ? state.userEmail.split('@')[0] : 'Hendra Wijaya'}</div>
             <div style={{ fontSize: 13, color: '#64748B' }}>{ROLES[state.role].label}</div>
           </div>
         </div>
-        <ProfileRow label="Email" value="hendra.wijaya@holdingos.co.id" />
+        <ProfileRow label="Email" value={state.userEmail || 'hendra.wijaya@holdingos.co.id'} />
         <ProfileRow label="Role Aktif" value={ROLES[state.role].label} />
         <ProfileRow label="Perusahaan Aktif" value={state.company === 'all' ? ALL_COMPANY.name : co(state.company).name} last />
       </Modal>

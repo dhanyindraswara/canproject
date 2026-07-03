@@ -9,12 +9,12 @@
 // (data in the browser's localStorage) so nothing breaks before setup.
 
 export const firebaseConfig = {
-  apiKey: 'PASTE_API_KEY',
-  authDomain: 'PASTE_PROJECT.firebaseapp.com',
-  projectId: 'PASTE_PROJECT_ID',
-  storageBucket: 'PASTE_PROJECT.appspot.com',
-  messagingSenderId: 'PASTE_SENDER_ID',
-  appId: 'PASTE_APP_ID',
+  apiKey: 'AIzaSyB6qebOyjS0rSAnUZAswvt2wlYMh1YuBeo',
+  authDomain: 'holdingos-3edca.firebaseapp.com',
+  projectId: 'holdingos-3edca',
+  storageBucket: 'holdingos-3edca.firebasestorage.app',
+  messagingSenderId: '569242935283',
+  appId: '1:569242935283:web:026ba5a834605f6bad7c86',
 }
 
 // True once real config has been pasted — flips the app from local mode to

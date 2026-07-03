@@ -7,12 +7,15 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from 'react'
+import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { ROLES, type MenuKey, type RoleKey } from './theme'
+import { auth, firebaseReady } from './firebase'
 
 export interface AppState {
   // navigation
@@ -36,6 +39,8 @@ export interface AppState {
   masterTab: string
   cashCompany: string
 
+  userEmail: string // signed-in user's email (Firebase mode)
+
   toast: string
 }
 
@@ -55,6 +60,7 @@ const initialState: AppState = {
   warehouseTab: 'stok',
   masterTab: 'perusahaan',
   cashCompany: 'all',
+  userEmail: '',
   toast: '',
 }
 
@@ -76,6 +82,19 @@ const Ctx = createContext<AppStore | null>(null)
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>(initialState)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Firebase mode: reflect auth state into the app (gate login/app screens).
+  useEffect(() => {
+    if (!firebaseReady || !auth) return
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setState((prev) =>
+        user
+          ? { ...prev, screen: 'app', userEmail: user.email ?? '', menu: prev.screen === 'app' ? prev.menu : ROLES[prev.role].land }
+          : { ...prev, screen: 'login', userEmail: '' },
+      )
+    })
+    return unsub
+  }, [])
 
   const set = useCallback((patch: Partial<AppState>) => {
     setState((prev) => ({ ...prev, ...patch }))
@@ -103,7 +122,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           detailProyek: null,
           detailSO: null,
         })),
-      logout: () => setState((prev) => ({ ...prev, screen: 'login', userMenuOpen: false })),
+      logout: () => {
+        if (firebaseReady && auth) {
+          signOut(auth).catch(() => {})
+          setState((prev) => ({ ...prev, userMenuOpen: false }))
+        } else {
+          setState((prev) => ({ ...prev, screen: 'login', userMenuOpen: false }))
+        }
+      },
       go: (menu) =>
         setState((prev) => ({
           ...prev,
