@@ -109,18 +109,29 @@ export default function Users() {
         return
       }
       setSaving(true)
+      let linkedExisting = false
       try {
         await createAuthUser(edit.email.trim(), edit.password)
       } catch (e) {
-        setSaving(false)
         const code = (e as { code?: string }).code || ''
-        toast(code.includes('email-already') ? 'Email sudah terdaftar di Firebase' : code.includes('invalid-email') ? 'Format email tidak valid' : 'Gagal membuat akun login')
-        return
+        if (code.includes('email-already')) {
+          // Account already exists (e.g. created in the console) — just attach
+          // the role record to it.
+          linkedExisting = true
+        } else {
+          setSaving(false)
+          toast(code.includes('invalid-email') ? 'Format email tidak valid' : code.includes('weak-password') ? 'Password terlalu lemah (min. 6)' : 'Gagal membuat akun login')
+          return
+        }
       }
       setSaving(false)
+      addRow('users', payload)
+      toast(linkedExisting ? 'Role ditautkan ke akun yang sudah ada' : 'User + akun login dibuat')
+      setEdit(null)
+      return
     }
     addRow('users', payload)
-    toast(cloudMode ? 'User + akun login dibuat' : 'User ditambahkan')
+    toast('User ditambahkan')
     setEdit(null)
   }
 
