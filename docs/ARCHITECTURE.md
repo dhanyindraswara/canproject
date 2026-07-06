@@ -171,8 +171,12 @@ Tanpa router library — routing berbasis state `menu` + flag drill-down
 - `firestore.rules` & `storage.rules` (di root repo): **semua akses butuh user
   login**; upload dibatasi 15 MB. Cocok untuk tool internal; bisa diperketat
   per-role/perusahaan.
-- **Client config bukan rahasia** — `firebaseConfig.ts` aman di-commit;
-  keamanan ditegakkan oleh Rules, bukan menyembunyikan API key.
+- **Client config bukan rahasia** — apiKey web Firebase memang ikut ter-bundle
+  di browser; keamanan ditegakkan oleh Rules + **API key restrictions** (Google
+  Cloud Console) + App Check, bukan menyembunyikan key. Meski begitu, nilainya
+  dibaca dari **environment variable** (`import.meta.env.VITE_FIREBASE_*`, lihat
+  `.env.example`) supaya tidak hard-coded di source dan tidak memicu secret
+  scanning. Saat build CI, nilai di-inject dari GitHub Actions secrets.
 - Domain GitHub Pages harus ditambahkan ke **Authorized domains** Firebase Auth.
 
 ## 10. CI/CD (deploy)
@@ -206,8 +210,8 @@ flowchart LR
 
 **Export PDF** — pakai `printDocument()` dari `src/print.ts`.
 
-**Menonaktifkan Firebase (mode lokal)** — kosongkan/placeholder-kan `apiKey` di
-`firebaseConfig.ts`; `firebaseEnabled` jadi `false` dan app memakai
+**Menonaktifkan Firebase (mode lokal)** — kosongkan `VITE_FIREBASE_API_KEY`
+(atau hapus `.env`); `firebaseEnabled` jadi `false` dan app memakai
 localStorage.
 
 ## 12. Keterbatasan yang diketahui

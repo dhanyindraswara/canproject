@@ -18,3 +18,8 @@ npm-debug.log*
 # vite / TS
 *.local
 *.tsbuildinfo
+
+# local env files (Firebase web config, etc.) — keep the .example template
+.env
+.env.*
+!.env.example
