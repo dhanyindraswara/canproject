@@ -22,9 +22,22 @@ back to me — I'll wire the rest into the app.
 2. Scroll to **Your apps** → click the **`</>` (Web)** icon → give it a
    nickname → **Register app**.
 3. You'll see a `firebaseConfig = { apiKey: "...", authDomain: "...", ... }`.
-   **Copy that whole object and paste it back to me** (or into
-   `src/firebaseConfig.ts`). These values are safe to share/commit for a web
-   app — security is enforced by the rules below.
+   Copy `.env.example` → `.env` and paste each value into the matching
+   `VITE_FIREBASE_*` variable (do **not** commit `.env`; it's gitignored).
+   For the GitHub Pages deploy, add the same values under **Settings → Secrets
+   and variables → Actions** as repository secrets with the same names.
+   These are client-side web config values — security is enforced by the rules
+   below plus API key restrictions, not by hiding them; we keep them out of the
+   repo only so secret scanning stays clean.
+
+### 4b. Restrict the API key (real protection)
+Google Cloud Console → **APIs & Services → Credentials** → your **Browser key**:
+- **Application restrictions → HTTP referrers**, add your domains, e.g.
+  `https://dhanyindraswara.github.io/*` (and `http://localhost:5173/*` for dev).
+- **API restrictions → Restrict key** to only the APIs you use
+  (Identity Toolkit / Firebase, Firestore, Cloud Storage).
+- If the old key was already public, consider **regenerating** it and updating
+  `.env` + the GitHub secrets.
 
 ## 5. Enable Cloud Storage
 > Note: for projects created after Oct 2024, Storage requires the **Blaze**

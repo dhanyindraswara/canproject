@@ -35,6 +35,18 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          # Firebase web config injected at build time from repo secrets so the
+          # values are not hard-coded in source. Add these under
+          # Settings → Secrets and variables → Actions → New repository secret.
+          # (These are client-side web config values, not server secrets, but
+          # keeping them out of the repo keeps secret scanning clean.)
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

@@ -61,7 +61,7 @@ src/
   store.tsx           state navigasi & auth (AppProvider)
   dataStore.tsx       semua data bisnis + sinkron Firestore/Storage (DataProvider)
   firebase.ts         inisialisasi Firebase (Auth/Firestore/Storage)
-  firebaseConfig.ts   konfigurasi project (public client config)
+  firebaseConfig.ts   konfigurasi project (dibaca dari env, lihat .env.example)
   roles.ts            pemetaan role → landing & visibilitas menu
   theme.ts            token warna, perusahaan/status/role, format Rupiah
   data.ts             seed data + tipe
